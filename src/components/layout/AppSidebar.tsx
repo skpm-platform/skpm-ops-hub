@@ -5,6 +5,8 @@ import {
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
   Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
+  KeyRound, Timer, CalendarClock, Banknote,
+} from "lucide-react";
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
