@@ -307,8 +307,12 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="h-4 w-4" /> Change Password</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2 max-w-sm"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 6 characters" /></div>
-              <Button onClick={updatePassword} size="sm" className="h-9">Update Password</Button>
+              <div className="space-y-2 max-w-sm">
+                <Label>New Password</Label>
+                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 8 characters, upper, number, special" />
+                <PasswordStrengthMeter password={newPassword} />
+              </div>
+              <Button onClick={updatePassword} size="sm" className="h-9" disabled={!isPasswordStrong(newPassword)}>Update Password</Button>
             </CardContent>
           </Card>
         </TabsContent>
