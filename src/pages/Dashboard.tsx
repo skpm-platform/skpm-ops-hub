@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -5,7 +6,8 @@ import { useUserRole } from "@/hooks/use-profile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase, Download, Shield } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase, Download, Shield, CalendarRange } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
