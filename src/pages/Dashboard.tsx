@@ -84,7 +84,7 @@ export default function Dashboard() {
   const { data: workOrders } = useQuery({
     queryKey: ["dashboard-work-orders"],
     queryFn: async () => {
-      const { data } = await supabase.from("work_orders").select("*");
+      const { data } = await supabase.from("work_orders").select("id,status").eq("status", "open");
       return data ?? [];
     },
   });
