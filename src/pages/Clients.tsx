@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,9 +56,11 @@ export default function Clients() {
       if (editingId) {
         const { error } = await supabase.from("clients").update(form).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated client", form.name);
       } else {
         const { error } = await supabase.from("clients").insert(form);
         if (error) throw error;
+        await logAudit("Created client", form.name);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["clients"] }); toast.success(editingId ? "Client updated" : "Client added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -65,7 +68,12 @@ export default function Clients() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("clients").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const client = data.find((c: any) => c.id === id);
+      const { error } = await supabase.from("clients").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted client", client?.name);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["clients"] }); toast.success("Client deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -88,6 +96,7 @@ export default function Clients() {
     { value: "inactive", label: "Inactive", count: data.filter((r: any) => r.status === "inactive").length },
   ];
 
+  const industries = [...new Set(data.map((r: any) => r.industry).filter(Boolean))];
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
@@ -96,8 +105,15 @@ export default function Clients() {
         <div className="flex items-center gap-3"><Briefcase className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Clients</h1><p className="text-sm text-muted-foreground">{data.length} clients</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={filtered} filename="clients" columns={[{key:"name",label:"Company"},{key:"contact_person",label:"Contact"},{key:"phone",label:"Phone"},{key:"email",label:"Email"},{key:"location",label:"Location"},{key:"industry",label:"Industry"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Client</Button>
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Client</Button>
         </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Clients</p><p className="text-2xl font-bold">{data.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Active</p><p className="text-2xl font-bold text-success">{data.filter((r:any)=>r.status==="active").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Industries</p><p className="text-2xl font-bold text-primary">{industries.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Locations</p><p className="text-2xl font-bold text-blue-600">{[...new Set(data.map((r:any)=>r.location).filter(Boolean))].length}</p></CardContent></Card>
       </div>
 
       <Card><CardContent className="pt-6">
@@ -123,7 +139,7 @@ export default function Clients() {
                 <TableCell>{r.contact_person || "—"}</TableCell>
                 <TableCell>{r.phone || "—"}</TableCell>
                 <TableCell>{r.location || "—"}</TableCell>
-                <TableCell>{r.industry || "—"}</TableCell>
+                <TableCell><Badge variant="outline">{r.industry || "—"}</Badge></TableCell>
                 <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
@@ -150,7 +166,7 @@ export default function Clients() {
           </div>
           <div><Label>Location</Label><ComboboxSelect value={form.location} onValueChange={v => setForm({...form, location: v})} options={locationOptions} placeholder="Select or type emirate..." /></div>
           <div><Label>Industry</Label><ComboboxSelect value={form.industry} onValueChange={v => setForm({...form, industry: v})} options={industryOptions} placeholder="Select or type industry..." /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update Client" : "Add Client"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update Client" : "Add Client"}</Button>
         </div>
       </DialogContent></Dialog>
 
@@ -158,8 +174,8 @@ export default function Clients() {
         <DialogHeader><DialogTitle>Client Details</DialogTitle></DialogHeader>
         {viewing && (
           <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              {[["Company",viewing.name],["Contact",viewing.contact_person],["Phone",viewing.phone],["Email",viewing.email],["Location",viewing.location],["Industry",viewing.industry],["Status",viewing.status]].map(([l,v])=>(
+            <div className="grid grid-cols-2 gap-3">
+              {[["Company",viewing.name],["Contact",viewing.contact_person],["Phone",viewing.phone],["Email",viewing.email],["Location",viewing.location],["Industry",viewing.industry],["Status",viewing.status],["Added",viewing.created_at?.slice(0,10)]].map(([l,v])=>(
                 <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium">{v||"—"}</p></div>
               ))}
             </div>
@@ -167,7 +183,7 @@ export default function Clients() {
         )}
       </DialogContent></Dialog>
 
-      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Client?" description="This will permanently remove this client." onConfirm={() => deleteId && remove.mutate(deleteId)} />
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Client?" description="This will permanently remove this client and may affect linked contracts and projects." onConfirm={() => deleteId && remove.mutate(deleteId)} />
     </div>
   );
 }

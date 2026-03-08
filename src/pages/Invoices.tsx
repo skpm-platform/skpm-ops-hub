@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -10,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Receipt, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Receipt, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -29,6 +30,8 @@ export default function Invoices() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewing, setViewing] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -46,9 +49,11 @@ export default function Invoices() {
       if (editingId) {
         const { error } = await supabase.from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status }).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated invoice", editingId);
       } else {
         const { error } = await supabase.from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null });
         if (error) throw error;
+        await logAudit("Created invoice", `AED ${(sub + vat).toLocaleString()}`);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success(editingId ? "Updated" : "Invoice created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -56,7 +61,11 @@ export default function Invoices() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("invoices").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("invoices").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted invoice", id);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -90,8 +99,8 @@ export default function Invoices() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Receipt className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Invoices</h1><p className="text-sm text-muted-foreground">{data.length} invoices</p></div></div>
         <div className="flex gap-2">
-          <ExportButton data={filtered} filename="invoices" columns={[{key:"invoice_no",label:"Invoice#"},{key:"clients.name",label:"Client"},{key:"total",label:"Total"},{key:"due_date",label:"Due"},{key:"status",label:"Status"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
+          <ExportButton data={filtered} filename="invoices" columns={[{key:"invoice_no",label:"Invoice#"},{key:"total",label:"Total"},{key:"due_date",label:"Due"},{key:"status",label:"Status"}]} />
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
         </div>
       </div>
 
@@ -113,25 +122,33 @@ export default function Invoices() {
           <Table><TableHeader><TableRow>
             <SortableHeader label="Invoice #" sortKey="invoice_no" direction={getSortDirection("invoice_no")} onToggle={toggleSort} />
             <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
+            <SortableHeader label="Subtotal" sortKey="subtotal" direction={getSortDirection("subtotal")} onToggle={toggleSort} />
+            <SortableHeader label="VAT" sortKey="vat" direction={getSortDirection("vat")} onToggle={toggleSort} />
             <SortableHeader label="Total (AED)" sortKey="total" direction={getSortDirection("total")} onToggle={toggleSort} />
             <SortableHeader label="Due Date" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
-            <TableBody>{pageData.map((r: any) => (
+            <TableBody>{pageData.map((r: any) => {
+              const overdue = r.due_date && new Date(r.due_date) < new Date() && r.status !== "paid";
+              return (
               <TableRow key={r.id}>
                 <TableCell className="font-mono text-xs">{r.invoice_no}</TableCell>
                 <TableCell>{r.clients?.name || "—"}</TableCell>
+                <TableCell className="text-xs">{r.subtotal?.toLocaleString()}</TableCell>
+                <TableCell className="text-xs">{r.vat?.toLocaleString()}</TableCell>
                 <TableCell className="font-medium">{r.total?.toLocaleString()}</TableCell>
-                <TableCell>{r.due_date || "—"}</TableCell>
+                <TableCell><span className={overdue ? "text-destructive font-medium" : ""}>{r.due_date || "—"}</span></TableCell>
                 <TableCell><Badge className={stC[r.status] || ""}>{r.status}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
                 </TableCell>
-              </TableRow>))}</TableBody></Table>
+              </TableRow>
+            );})}</TableBody></Table>
           </div>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
@@ -145,8 +162,21 @@ export default function Invoices() {
           <div><Label>Subtotal (AED)</Label><Input type="number" value={form.subtotal} onChange={e => setForm({...form, subtotal: e.target.value})} /><p className="text-xs text-muted-foreground mt-1">5% VAT auto-applied</p></div>
           <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="sent">Sent</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="overdue">Overdue</SelectItem></SelectContent></Select></div>}
-          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Invoice"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Invoice"}</Button>
         </div>
+      </DialogContent></Dialog>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Invoice Details</DialogTitle></DialogHeader>
+        {viewing && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              {[["Invoice#",viewing.invoice_no],["Client",viewing.clients?.name],["Issue Date",viewing.issue_date],["Due Date",viewing.due_date],["Subtotal",`AED ${viewing.subtotal?.toLocaleString()}`],["VAT (5%)",`AED ${viewing.vat?.toLocaleString()}`],["Total",`AED ${viewing.total?.toLocaleString()}`],["Status",viewing.status],["Payment Method",viewing.payment_method],["Paid Date",viewing.paid_date]].map(([l,v])=>(
+                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
+              ))}
+            </div>
+          </div>
+        )}
       </DialogContent></Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Invoice?" onConfirm={() => deleteId && remove.mutate(deleteId)} />

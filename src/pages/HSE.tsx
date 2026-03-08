@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,9 +52,11 @@ export default function HSE() {
       if (editingId) {
         const { error } = await supabase.from("hse_incidents").update(form).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated HSE incident", form.type);
       } else {
         const { error } = await supabase.from("hse_incidents").insert({ ...form, reported_by: user?.id });
         if (error) throw error;
+        await logAudit("Reported HSE incident", form.type);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["hse"] }); toast.success(editingId ? "Updated" : "Incident reported"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -61,7 +64,11 @@ export default function HSE() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("hse_incidents").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("hse_incidents").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted HSE incident", id);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["hse"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -93,7 +100,7 @@ export default function HSE() {
         <div className="flex items-center gap-3"><Shield className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Health & Safety</h1><p className="text-sm text-muted-foreground">{data.length} incidents</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={filtered} filename="hse-incidents" columns={[{key:"date",label:"Date"},{key:"type",label:"Type"},{key:"description",label:"Description"},{key:"status",label:"Status"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Report Incident</Button>
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Report Incident</Button>
         </div>
       </div>
 
@@ -115,6 +122,7 @@ export default function HSE() {
           <Table><TableHeader><TableRow>
             <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
             <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+            <SortableHeader label="Injured Person" sortKey="injured_person" direction={getSortDirection("injured_person")} onToggle={toggleSort} />
             <SortableHeader label="Description" sortKey="description" direction={getSortDirection("description")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
@@ -123,6 +131,7 @@ export default function HSE() {
               <TableRow key={r.id}>
                 <TableCell>{r.date || "—"}</TableCell>
                 <TableCell><Badge className={typeC[r.type] || ""}>{r.type?.replace("_"," ")}</Badge></TableCell>
+                <TableCell>{r.injured_person || "—"}</TableCell>
                 <TableCell className="max-w-xs truncate">{r.description || "—"}</TableCell>
                 <TableCell><Badge variant={r.status === "closed" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                 <TableCell>
@@ -148,14 +157,14 @@ export default function HSE() {
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
           <div><Label>Injured Person</Label><Input value={form.injured_person} onChange={e => setForm({...form, injured_person: e.target.value})} placeholder="If applicable" /></div>
           <div><Label>Action Taken</Label><Textarea value={form.action_taken} onChange={e => setForm({...form, action_taken: e.target.value})} /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit Report"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit Report"}</Button>
         </div>
       </DialogContent></Dialog>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Incident Details</DialogTitle></DialogHeader>
         {viewing && (
-          <div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-2">
+          <div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-3">
             {[["Date",viewing.date],["Type",viewing.type?.replace("_"," ")],["Status",viewing.status],["Injured Person",viewing.injured_person]].map(([l,v])=>(
               <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
             ))}

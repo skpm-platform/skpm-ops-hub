@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -9,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Calendar, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Calendar, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -35,6 +36,8 @@ export default function Maintenance() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewing, setViewing] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
@@ -49,9 +52,11 @@ export default function Maintenance() {
       if (editingId) {
         const { error } = await supabase.from("maintenance_schedules").update(form).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated maintenance", form.asset_name);
       } else {
         const { error } = await supabase.from("maintenance_schedules").insert(form);
         if (error) throw error;
+        await logAudit("Created maintenance schedule", form.asset_name);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["maintenance"] }); toast.success(editingId ? "Updated" : "Schedule added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -59,7 +64,11 @@ export default function Maintenance() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("maintenance_schedules").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("maintenance_schedules").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted maintenance schedule", id);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["maintenance"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -92,7 +101,7 @@ export default function Maintenance() {
         <div className="flex items-center gap-3"><Calendar className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Maintenance & PPM</h1><p className="text-sm text-muted-foreground">{data.length} schedules</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={filtered} filename="maintenance" columns={[{key:"asset_name",label:"Asset"},{key:"type",label:"Type"},{key:"frequency",label:"Frequency"},{key:"next_due",label:"Next Due"},{key:"status",label:"Status"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Schedule</Button>
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Schedule</Button>
         </div>
       </div>
 
@@ -115,6 +124,7 @@ export default function Maintenance() {
             <SortableHeader label="Asset" sortKey="asset_name" direction={getSortDirection("asset_name")} onToggle={toggleSort} />
             <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
             <SortableHeader label="Frequency" sortKey="frequency" direction={getSortDirection("frequency")} onToggle={toggleSort} />
+            <SortableHeader label="Last Done" sortKey="last_done" direction={getSortDirection("last_done")} onToggle={toggleSort} />
             <SortableHeader label="Next Due" sortKey="next_due" direction={getSortDirection("next_due")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
@@ -126,10 +136,12 @@ export default function Maintenance() {
                 <TableCell className="font-medium">{r.asset_name}</TableCell>
                 <TableCell><Badge variant="outline" className="capitalize">{r.type}</Badge></TableCell>
                 <TableCell className="capitalize">{r.frequency}</TableCell>
+                <TableCell className="text-xs">{r.last_done || "—"}</TableCell>
                 <TableCell><span className={isOverdue ? "text-destructive font-medium" : ""}>{r.next_due || "—"}</span></TableCell>
                 <TableCell><Badge variant={r.status === "completed" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
@@ -152,8 +164,21 @@ export default function Maintenance() {
           </div>
           <div><Label>Next Due Date</Label><Input type="date" value={form.next_due} onChange={e => setForm({...form, next_due: e.target.value})} /></div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="scheduled">Scheduled</SelectItem><SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="completed">Completed</SelectItem></SelectContent></Select></div>}
-          <Button className="w-full" onClick={() => save.mutate()} disabled={!form.asset_name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.asset_name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
         </div>
+      </DialogContent></Dialog>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Maintenance Details</DialogTitle></DialogHeader>
+        {viewing && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              {[["Asset",viewing.asset_name],["Type",viewing.type],["Frequency",viewing.frequency],["Last Done",viewing.last_done],["Next Due",viewing.next_due],["Status",viewing.status]].map(([l,v])=>(
+                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
+              ))}
+            </div>
+          </div>
+        )}
       </DialogContent></Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Schedule?" onConfirm={() => deleteId && remove.mutate(deleteId)} />

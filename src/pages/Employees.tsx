@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Users, Pencil, Trash2, Eye, Download } from "lucide-react";
+import { Plus, Search, Users, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -61,9 +62,11 @@ export default function Employees() {
       if (editingId) {
         const { error } = await supabase.from("employees").update(payload).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated employee", form.name);
       } else {
         const { error } = await supabase.from("employees").insert({ ...payload, employee_id: `EMP-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
+        await logAudit("Added employee", form.name);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success(editingId ? "Employee updated" : "Employee added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -71,7 +74,12 @@ export default function Employees() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("employees").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const emp = data.find((e: any) => e.id === id);
+      const { error } = await supabase.from("employees").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted employee", emp?.name);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -102,11 +110,10 @@ export default function Employees() {
         <div className="flex items-center gap-3"><Users className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Employees</h1><p className="text-sm text-muted-foreground">{data.length} total employees</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={filtered} filename="employees" columns={[{key:"employee_id",label:"ID"},{key:"name",label:"Name"},{key:"position",label:"Position"},{key:"nationality",label:"Nationality"},{key:"salary",label:"Salary"},{key:"status",label:"Status"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>
         </div>
       </div>
 
-      {/* KPI Cards */}
       <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total</p><p className="text-2xl font-bold">{data.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Active</p><p className="text-2xl font-bold text-success">{data.filter((r:any)=>r.status==="active").length}</p></CardContent></Card>
@@ -158,7 +165,6 @@ export default function Employees() {
         )}
       </CardContent></Card>
 
-      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
@@ -181,18 +187,17 @@ export default function Employees() {
               <div><Label>Visa No.</Label><Input value={form.visa_no} onChange={e => setForm({...form, visa_no: e.target.value})} /></div>
             </div>
             <div><Label>Visa Expiry</Label><Input type="date" value={form.visa_expiry} onChange={e => setForm({...form, visa_expiry: e.target.value})} /></div>
-            <Button className="w-full" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update Employee" : "Add Employee"}</Button>
+            <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update Employee" : "Add Employee"}</Button>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* View Details Dialog */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Employee Details</DialogTitle></DialogHeader>
           {viewing && (
             <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-3">
                 {[
                   ["Employee ID", viewing.employee_id], ["Name", viewing.name], ["Position", viewing.position],
                   ["Nationality", viewing.nationality], ["Email", viewing.email], ["Phone", viewing.phone],
