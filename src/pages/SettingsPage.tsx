@@ -143,7 +143,7 @@ export default function SettingsPage() {
       if (!selectedUser) return;
       const { error } = await supabase.rpc("admin_update_user_role", {
         _target_user_id: selectedUser.user_id,
-        _new_role: selectedRole,
+        _new_role: selectedRole as "admin" | "manager" | "staff",
       });
       if (error) throw error;
       await logAudit("Changed user role", `${selectedUser.name ?? selectedUser.user_id} → ${selectedRole}`);
