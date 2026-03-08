@@ -77,7 +77,12 @@ export default function WorkOrders() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("work_orders").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const wo = data.find((w: any) => w.id === id);
+      const { error } = await supabase.from("work_orders").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted work order", wo?.title, "work_orders");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
