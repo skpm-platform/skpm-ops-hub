@@ -11,6 +11,7 @@ import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowU
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
+import { AIInsightsWidget } from "@/components/AIInsightsWidget";
 
 export default function Dashboard() {
   const { user } = useAuth();
