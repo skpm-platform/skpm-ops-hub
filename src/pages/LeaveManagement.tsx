@@ -58,7 +58,9 @@ export default function LeaveManagement() {
   });
 
   const statusColor = (s: string) => { if (s === "approved") return "bg-success/15 text-success border-0"; if (s === "rejected") return "bg-destructive/15 text-destructive border-0"; return "bg-warning/15 text-warning border-0"; };
-  const statuses = buildStatuses(leaves, "status", ["all","pending","approved","rejected"]);
+  const statusCounts: Record<string, number> = {};
+  leaves.forEach((l: any) => { statusCounts[l.status ?? "pending"] = (statusCounts[l.status ?? "pending"] || 0) + 1; });
+  const statuses = buildStatuses(statusCounts, ["pending","approved","rejected"]);
 
   const filtered = leaves.filter((l: any) => {
     const matchSearch = l.type?.toLowerCase().includes(search.toLowerCase()) || l.reason?.toLowerCase().includes(search.toLowerCase()) || l.employees?.name?.toLowerCase().includes(search.toLowerCase());
