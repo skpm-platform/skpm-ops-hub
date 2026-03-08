@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -5,7 +6,8 @@ import { useUserRole } from "@/hooks/use-profile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase, Download, Shield } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase, Download, Shield, CalendarRange } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
@@ -14,6 +16,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: role } = useUserRole();
   const isAdmin = role === "admin";
+  const [dateRange, setDateRange] = useState("6m");
+  const rangeMonths = dateRange === "1m" ? 1 : dateRange === "3m" ? 3 : dateRange === "6m" ? 6 : 12;
 
   const { data: profiles } = useQuery({
     queryKey: ["dashboard-profiles"],
@@ -40,10 +44,10 @@ export default function Dashboard() {
   });
 
   const { data: transactions } = useQuery({
-    queryKey: ["dashboard-transactions"],
+    queryKey: ["dashboard-transactions", rangeMonths],
     queryFn: async () => {
-      const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
-      const { data } = await supabase.from("transactions").select("date,type,amount,category").gte("date", sixMonthsAgo).order("date", { ascending: true });
+      const rangeAgo = format(subMonths(new Date(), rangeMonths), "yyyy-MM-dd");
+      const { data } = await supabase.from("transactions").select("date,type,amount,category").gte("date", rangeAgo).order("date", { ascending: true });
       return data ?? [];
     },
   });
@@ -114,8 +118,8 @@ export default function Dashboard() {
   });
 
   // Revenue chart
-  const revenueChart = Array.from({ length: 6 }, (_, i) => {
-    const month = subMonths(new Date(), 5 - i);
+  const revenueChart = Array.from({ length: rangeMonths }, (_, i) => {
+    const month = subMonths(new Date(), rangeMonths - 1 - i);
     const start = format(startOfMonth(month), "yyyy-MM-dd");
     const end = format(endOfMonth(month), "yyyy-MM-dd");
     const monthTx = (transactions ?? []).filter(t => t.date >= start && t.date <= end);
@@ -193,12 +197,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1m">Last Month</SelectItem>
+                <SelectItem value="3m">Last 3 Months</SelectItem>
+                <SelectItem value="6m">Last 6 Months</SelectItem>
+                <SelectItem value="12m">Last 12 Months</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {isAdmin && (
             <Button variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={handleFullExport}>
               <Download className="h-3.5 w-3.5" /> Export All Data
@@ -254,7 +270,7 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Revenue vs Expenses</CardTitle>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last 6 months</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last {rangeMonths} month{rangeMonths > 1 ? "s" : ""}</span>
             </div>
           </CardHeader>
           <CardContent>
