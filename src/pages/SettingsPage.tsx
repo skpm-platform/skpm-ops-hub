@@ -85,6 +85,7 @@ export default function SettingsPage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!validateFile(file, 2)) return;
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
