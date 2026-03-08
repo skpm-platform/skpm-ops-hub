@@ -180,7 +180,7 @@ export default function Attendance() {
           <p className="text-muted-foreground">Track daily attendance & working hours</p>
         </div>
         <div className="flex gap-2">
-          <ExportButton data={displayRecords} filename="attendance" columns={["date", "clock_in", "clock_out", "status", "notes"]} />
+          <ExportButton data={displayRecords} filename="attendance" columns={[{key:"date",label:"Date"},{key:"clock_in",label:"Clock In"},{key:"clock_out",label:"Clock Out"},{key:"status",label:"Status"},{key:"notes",label:"Notes"}]} />
           <Button onClick={() => clockIn.mutate()} disabled={!!isClockedIn || !!todayRecord || clockIn.isPending} size="sm" className="h-9 gap-2">
             {clockIn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Clock In
           </Button>
