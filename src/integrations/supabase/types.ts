@@ -1921,6 +1921,10 @@ export type Database = {
         }
         Returns: boolean
       }
+      upsert_system_setting: {
+        Args: { _key: string; _updated_by?: string; _value: string }
+        Returns: undefined
+      }
     }
     Enums: {
       app_role: "admin" | "staff" | "manager"
