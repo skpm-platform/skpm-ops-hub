@@ -1,121 +1,157 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Clock, Download } from "lucide-react";
-import { toast } from "@/hooks/use-toast";
-import { format } from "date-fns";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Textarea } from "@/components/ui/textarea";
+import { ComboboxSelect } from "@/components/ComboboxSelect";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ExportButton } from "@/components/ExportButton";
+import { StatusFilter, buildStatuses } from "@/components/StatusFilter";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
+import { Plus, Search, Clock, Eye, Trash2, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import { format } from "date-fns";
 
-const statusColors: Record<string, string> = {
-  draft: "bg-muted text-muted-foreground",
-  submitted: "bg-info/15 text-info",
-  approved: "bg-success/15 text-success",
-  rejected: "bg-destructive/15 text-destructive",
-};
+const statusColors: Record<string, string> = { draft: "bg-muted text-muted-foreground", submitted: "bg-info/15 text-info", approved: "bg-success/15 text-success", rejected: "bg-destructive/15 text-destructive" };
 
 export default function Timesheets() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ date: "", hours_worked: 8, overtime_hours: 0, notes: "" });
+  const [viewItem, setViewItem] = useState<any>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "" });
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["timesheets"],
-    queryFn: async () => {
-      const { data, error } = await supabase.from("timesheets").select("*, employees(name), projects(name), sites(name)").order("created_at", { ascending: false });
-      if (error) throw error;
-      return data;
-    },
+    queryFn: async () => { const { data, error } = await supabase.from("timesheets").select("*, employees(name), projects(name), sites(name)").order("created_at", { ascending: false }); if (error) throw error; return data; },
   });
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("timesheets").insert({ ...form, hours_worked: Number(form.hours_worked), overtime_hours: Number(form.overtime_hours) });
+      const { error } = await supabase.from("timesheets").insert({ date: form.date, hours_worked: Number(form.hours_worked), overtime_hours: Number(form.overtime_hours), notes: form.notes });
       if (error) throw error;
+      await logAudit("Added timesheet entry", `${form.date}: ${form.hours_worked}h`);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); setOpen(false); setForm({ date: "", hours_worked: 8, overtime_hours: 0, notes: "" }); toast({ title: "Timesheet added" }); },
-    onError: (e: any) => toast({ title: "Error", description: e.message, variant: "destructive" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); setOpen(false); setForm({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "" }); toast.success("Timesheet added"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const remove = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("timesheets").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
   const totalHours = rows.reduce((s: number, r: any) => s + (r.hours_worked || 0), 0);
   const totalOT = rows.reduce((s: number, r: any) => s + (r.overtime_hours || 0), 0);
+  const statusCounts = rows.reduce((acc: Record<string, number>, r: any) => { acc[r.status || "draft"] = (acc[r.status || "draft"] || 0) + 1; return acc; }, {});
 
   const filtered = rows
-    .filter((r: any) => r.employees?.name?.toLowerCase().includes(search.toLowerCase()) || r.status?.toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => (r.employees?.name || "").toLowerCase().includes(search.toLowerCase()) || (r.notes || "").toLowerCase().includes(search.toLowerCase()))
     .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3"><Clock className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Timesheets</h1></div>
-        <Dialog open={open} onOpenChange={setOpen}>
-          <DialogTrigger asChild><Button><Plus className="mr-2 h-4 w-4" />Add Entry</Button></DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>New Timesheet Entry</DialogTitle></DialogHeader>
-            <div className="space-y-3">
-              <div><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><Label>Hours Worked</Label><Input type="number" min={0} max={24} value={form.hours_worked} onChange={e => setForm(f => ({ ...f, hours_worked: Number(e.target.value) }))} /></div>
-                <div><Label>Overtime Hours</Label><Input type="number" min={0} value={form.overtime_hours} onChange={e => setForm(f => ({ ...f, overtime_hours: Number(e.target.value) }))} /></div>
-              </div>
-              <div><Label>Notes</Label><Input placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
-              <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>Save</Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+        <div className="flex gap-2">
+          <ExportButton data={rows} filename="timesheets" columns={[{ key: "date", label: "Date" }, { key: "hours_worked", label: "Hours" }, { key: "overtime_hours", label: "OT" }, { key: "status", label: "Status" }]} />
+          <Button size="sm" className="h-9" onClick={() => setOpen(true)}><Plus className="mr-2 h-4 w-4" />Add Entry</Button>
+        </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Entries</p><p className="text-2xl font-semibold mt-1">{rows.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Hours</p><p className="text-2xl font-semibold mt-1">{totalHours.toLocaleString()}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Overtime Hours</p><p className="text-2xl font-semibold mt-1 text-warning">{totalOT.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Approved</p><p className="text-2xl font-semibold mt-1 text-success">{rows.filter((r: any) => r.status === "approved").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Approved</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts["approved"] || 0}</p></CardContent></Card>
       </div>
 
+      <StatusFilter statuses={buildStatuses(statusCounts, ["draft", "submitted", "approved", "rejected"])} selected={statusFilter} onSelect={setStatusFilter} />
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 flex flex-col sm:flex-row gap-3">
-          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="submitted">Submitted</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem></SelectContent></Select>
-        </div>
-        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No timesheets</p> : (
+        <div className="mb-4 relative max-w-sm"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        {isLoading ? <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin" /></div> : (
           <>
-          <Table><TableHeader><TableRow>
-            <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
-            <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
-            <SortableHeader label="Hours" sortKey="hours_worked" direction={getSortDirection("hours_worked")} onToggle={toggleSort} />
-            <SortableHeader label="OT" sortKey="overtime_hours" direction={getSortDirection("overtime_hours")} onToggle={toggleSort} />
-            <SortableHeader label="Project" sortKey="projects.name" direction={getSortDirection("projects.name")} onToggle={toggleSort} />
-            <SortableHeader label="Site" sortKey="sites.name" direction={getSortDirection("sites.name")} onToggle={toggleSort} />
-            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-          </TableRow></TableHeader>
-            <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.employees?.name ?? "—"}</TableCell>
-                <TableCell>{r.date ? format(new Date(r.date), "dd MMM yyyy") : "—"}</TableCell>
-                <TableCell>{r.hours_worked}</TableCell>
-                <TableCell>{r.overtime_hours > 0 ? <span className="text-warning font-medium">{r.overtime_hours}</span> : "0"}</TableCell>
-                <TableCell>{r.projects?.name ?? "—"}</TableCell>
-                <TableCell>{r.sites?.name ?? "—"}</TableCell>
-                <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
-              </TableRow>
-            ))}</TableBody></Table>
-          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+            <Table><TableHeader><TableRow>
+              <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
+              <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
+              <SortableHeader label="Hours" sortKey="hours_worked" direction={getSortDirection("hours_worked")} onToggle={toggleSort} />
+              <SortableHeader label="OT" sortKey="overtime_hours" direction={getSortDirection("overtime_hours")} onToggle={toggleSort} />
+              <SortableHeader label="Project" sortKey="projects.name" direction={getSortDirection("projects.name")} onToggle={toggleSort} />
+              <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+              <SortableHeader label="" sortKey="" direction={null} onToggle={() => {}} className="w-20" />
+            </TableRow></TableHeader>
+              <TableBody>
+                {pageData.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No timesheets</TableCell></TableRow> : pageData.map((r: any) => (
+                  <TableRow key={r.id}>
+                    <TableCell className="font-medium">{r.employees?.name ?? "—"}</TableCell>
+                    <TableCell>{r.date ? format(new Date(r.date), "dd MMM yyyy") : "—"}</TableCell>
+                    <TableCell>{r.hours_worked}</TableCell>
+                    <TableCell>{r.overtime_hours > 0 ? <span className="text-warning font-medium">{r.overtime_hours}</span> : "0"}</TableCell>
+                    <TableCell>{r.projects?.name ?? "—"}</TableCell>
+                    <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
+                    <TableCell>
+                      <div className="flex gap-1">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewItem(r)}><Eye className="h-4 w-4" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+            <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </CardContent></Card>
+
+      {/* Add Dialog */}
+      <Dialog open={open} onOpenChange={setOpen}><DialogContent>
+        <DialogHeader><DialogTitle>New Timesheet Entry</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <div><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Hours Worked</Label><Input type="number" min={0} max={24} value={form.hours_worked} onChange={e => setForm({ ...form, hours_worked: e.target.value })} /></div>
+            <div><Label>Overtime Hours</Label><Input type="number" min={0} value={form.overtime_hours} onChange={e => setForm({ ...form, overtime_hours: e.target.value })} /></div>
+          </div>
+          <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} /></div>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : "Save"}</Button>
+        </div>
+      </DialogContent></Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent>
+        <DialogHeader><DialogTitle>Timesheet Details</DialogTitle></DialogHeader>
+        {viewItem && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><p className="text-xs text-muted-foreground">Employee</p><p className="font-medium">{viewItem.employees?.name || "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Date</p><p>{viewItem.date ? format(new Date(viewItem.date), "dd MMM yyyy") : "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Hours Worked</p><p>{viewItem.hours_worked}h</p></div>
+              <div><p className="text-xs text-muted-foreground">Overtime</p><p>{viewItem.overtime_hours}h</p></div>
+              <div><p className="text-xs text-muted-foreground">Project</p><p>{viewItem.projects?.name || "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Site</p><p>{viewItem.sites?.name || "—"}</p></div>
+              <div><p className="text-xs text-muted-foreground">Status</p><Badge variant="secondary" className={`border-0 ${statusColors[viewItem.status] || ""}`}>{viewItem.status}</Badge></div>
+            </div>
+            {viewItem.notes && <div><p className="text-xs text-muted-foreground">Notes</p><p className="text-sm">{viewItem.notes}</p></div>}
+          </div>
+        )}
+      </DialogContent></Dialog>
+
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} onConfirm={() => deleteId && remove.mutate(deleteId)} />
     </div>
   );
 }
