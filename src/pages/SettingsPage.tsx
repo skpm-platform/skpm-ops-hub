@@ -32,6 +32,36 @@ export default function SettingsPage() {
   const [profileName, setProfileName] = useState("");
   const [companyName, setCompanyName] = useState("SKPM Technical Service");
   const [uploading, setUploading] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const logoRef = useRef<HTMLInputElement>(null);
+  const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
+  const updateSetting = useUpdateSystemSetting();
+
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !user) return;
+    setLogoUploading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `company/logo_${Date.now()}.${ext}`;
+      const { error: uploadErr } = await supabase.storage.from("documents").upload(path, file, { upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
+      await updateSetting.mutateAsync({ key: "company_logo_url", value: urlData.publicUrl });
+      logAudit("Updated company logo", "settings");
+      toast.success("Company logo updated");
+    } catch (err: any) {
+      toast.error(err.message || "Upload failed");
+    } finally {
+      setLogoUploading(false);
+    }
+  };
+
+  const handleRemoveLogo = async () => {
+    await updateSetting.mutateAsync({ key: "company_logo_url", value: null });
+    logAudit("Removed company logo", "settings");
+    toast.success("Logo removed, default will be used");
+  };
 
   // Role management
   const [roleDialogOpen, setRoleDialogOpen] = useState(false);
