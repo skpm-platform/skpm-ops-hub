@@ -39,6 +39,7 @@ export function AppLayout() {
               </Button>
             </div>
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <NotificationBell />
               <Separator orientation="vertical" className="h-5" />
               <div className="flex items-center gap-2 pl-1">
