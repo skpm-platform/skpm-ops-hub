@@ -58,12 +58,22 @@ export default function Tasks() {
   });
 
   const moveTask = useMutation({
-    mutationFn: async ({ id, status }: { id: string; status: TaskStatus }) => { const { error } = await supabase.from("tasks").update({ status }).eq("id", id); if (error) throw error; },
+    mutationFn: async ({ id, status }: { id: string; status: TaskStatus }) => {
+      const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
+      if (error) throw error;
+      const task = tasks.find(t => t.id === id);
+      await logAudit("Moved task", `${task?.title} → ${status}`, "tasks");
+    },
     onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks"] }),
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("tasks").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const task = tasks.find(t => t.id === id);
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted task", task?.title, "tasks");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tasks"] }); toast.success("Deleted"); setDeleteId(null); setViewItem(null); },
   });
 
