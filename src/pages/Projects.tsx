@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,7 +22,7 @@ import { StatusFilter } from "@/components/StatusFilter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ExportButton } from "@/components/ExportButton";
 
-const statusColors: Record<string, string> = { active: "bg-emerald-100 text-emerald-700", completed: "bg-blue-100 text-blue-700", on_hold: "bg-amber-100 text-amber-700", cancelled: "bg-red-100 text-red-700" };
+const statusColors: Record<string, string> = { active: "bg-success/15 text-success", completed: "bg-primary/15 text-primary", on_hold: "bg-warning/15 text-warning", cancelled: "bg-destructive/15 text-destructive" };
 const emptyForm = { name: "", description: "", status: "active", priority: "medium", budget: "", start_date: "", end_date: "", client_id: "" };
 
 export default function Projects() {
@@ -51,9 +52,11 @@ export default function Projects() {
       if (editingId) {
         const { error } = await supabase.from("projects").update(payload).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated project", form.name, "projects");
       } else {
         const { error } = await supabase.from("projects").insert({ ...payload, project_no: `PRJ-${Date.now().toString().slice(-6)}`, created_by: user?.id });
         if (error) throw error;
+        await logAudit("Created project", form.name, "projects");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success(editingId ? "Project updated" : "Project created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -61,7 +64,12 @@ export default function Projects() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("projects").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const proj = projects.find((p: any) => p.id === id);
+      const { error } = await supabase.from("projects").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted project", proj?.name, "projects");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Project deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -128,7 +136,7 @@ export default function Projects() {
               <TableRow key={p.id}>
                 <TableCell><span className="font-medium">{p.name}</span><br/><span className="text-xs text-muted-foreground">{p.project_no}</span></TableCell>
                 <TableCell>{p.clients?.name || "—"}</TableCell>
-                <TableCell><Badge className={statusColors[p.status] || ""}>{p.status}</Badge></TableCell>
+                <TableCell><Badge className={`border-0 ${statusColors[p.status] || ""}`}>{p.status}</Badge></TableCell>
                 <TableCell><Badge variant={p.priority === "high" ? "destructive" : "secondary"}>{p.priority}</Badge></TableCell>
                 <TableCell>
                   <div className="space-y-1">

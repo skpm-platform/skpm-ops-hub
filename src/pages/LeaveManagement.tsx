@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/use-profile";
 import { logAudit } from "@/lib/audit";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,13 +21,17 @@ import { SortableHeader } from "@/components/SortableHeader";
 import { ExportButton } from "@/components/ExportButton";
 import { ComboboxSelect } from "@/components/ComboboxSelect";
 import { StatusFilter, buildStatuses } from "@/components/StatusFilter";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 
 export default function LeaveManagement() {
   const { user } = useAuth();
+  const { data: role } = useUserRole();
+  const isManagerUp = role === "admin" || role === "manager";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const [form, setForm] = useState({ type: "annual", start_date: "", end_date: "", days: 1, reason: "" });
 
   const { data: leaves = [], isLoading } = useQuery({
@@ -42,7 +47,7 @@ export default function LeaveManagement() {
     mutationFn: async () => {
       const { error } = await supabase.from("leave_requests").insert({ ...form, days: Number(form.days) });
       if (error) throw error;
-      await logAudit("Submitted leave request", `${form.type} — ${form.days} days`);
+      await logAudit("Submitted leave request", `${form.type} — ${form.days} days`, "leave");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave_requests"] }); setOpen(false); setForm({ type: "annual", start_date: "", end_date: "", days: 1, reason: "" }); toast.success("Leave request submitted"); },
     onError: (e: any) => toast.error(e.message),
@@ -52,9 +57,11 @@ export default function LeaveManagement() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("leave_requests").update({ status, approved_by: user?.id }).eq("id", id);
       if (error) throw error;
-      await logAudit(`Leave ${status}`, id);
+      const leave = leaves.find((l: any) => l.id === id);
+      await logAudit(`Leave ${status}`, `${leave?.employees?.name ?? "Unknown"} — ${leave?.type} (${leave?.days} days)`, "leave");
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave_requests"] }); toast.success("Status updated"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave_requests"] }); toast.success("Status updated"); setConfirmAction(null); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const statusColor = (s: string) => { if (s === "approved") return "bg-success/15 text-success border-0"; if (s === "rejected") return "bg-destructive/15 text-destructive border-0"; return "bg-warning/15 text-warning border-0"; };
@@ -138,11 +145,14 @@ export default function LeaveManagement() {
                 <TableCell className="font-medium">{l.days}</TableCell>
                 <TableCell><Badge variant="secondary" className={statusColor(l.status)}>{l.status}</Badge></TableCell>
                 <TableCell>
-                  {l.status === "pending" && (
+                  {l.status === "pending" && isManagerUp && (
                     <div className="flex gap-1">
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => updateStatus.mutate({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => updateStatus.mutate({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
                     </div>
+                  )}
+                  {l.status === "pending" && !isManagerUp && (
+                    <span className="text-xs text-muted-foreground">Awaiting approval</span>
                   )}
                 </TableCell>
               </TableRow>
@@ -151,6 +161,14 @@ export default function LeaveManagement() {
         </Table>
         <div className="p-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
       </div>
+
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={() => setConfirmAction(null)}
+        title={confirmAction?.status === "approved" ? "Approve Leave Request?" : "Reject Leave Request?"}
+        description={confirmAction?.status === "approved" ? "This will approve the leave request and notify the employee." : "This will reject the leave request."}
+        onConfirm={() => confirmAction && updateStatus.mutate(confirmAction)}
+      />
     </div>
   );
 }
