@@ -38,9 +38,17 @@ export default function SettingsPage() {
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const updateSetting = useUpdateSystemSetting();
 
+  const validateFile = (file: File, maxMB = 5) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
+    if (!allowed.includes(file.type)) { toast.error("Only JPG, PNG, WebP or SVG files allowed"); return false; }
+    if (file.size > maxMB * 1024 * 1024) { toast.error(`File must be under ${maxMB}MB`); return false; }
+    return true;
+  };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!validateFile(file, 2)) return;
     setLogoUploading(true);
     try {
       const ext = file.name.split(".").pop();
