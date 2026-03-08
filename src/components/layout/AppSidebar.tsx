@@ -4,7 +4,7 @@ import {
   Briefcase, Receipt, CreditCard, ShoppingCart, FileSignature,
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
-  Truck, Home, Monitor, Contact,
+  Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
