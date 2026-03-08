@@ -106,13 +106,11 @@ export default function SettingsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggleDarkMode = (checked: boolean) => {
-    setDarkMode(checked);
-    document.documentElement.classList.toggle("dark", checked);
-  };
-
   const updatePassword = async () => {
-    if (newPassword.length < 6) { toast.error("Min 6 characters"); return; }
+    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    if (!/[A-Z]/.test(newPassword)) { toast.error("Password must contain an uppercase letter"); return; }
+    if (!/[0-9]/.test(newPassword)) { toast.error("Password must contain a number"); return; }
+    if (!/[^A-Za-z0-9]/.test(newPassword)) { toast.error("Password must contain a special character"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
     else { toast.success("Password updated"); setNewPassword(""); }
