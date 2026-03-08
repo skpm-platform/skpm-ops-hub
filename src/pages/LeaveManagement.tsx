@@ -4,13 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function LeaveManagement() {
   const { user } = useAuth();
@@ -30,10 +33,7 @@ export default function LeaveManagement() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("leave_requests").insert({
-        ...form,
-        days: Number(form.days),
-      });
+      const { error } = await supabase.from("leave_requests").insert({ ...form, days: Number(form.days) });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave_requests"] }); setOpen(false); setForm({ type: "annual", start_date: "", end_date: "", days: 1, reason: "" }); toast({ title: "Leave request submitted" }); },
@@ -49,12 +49,8 @@ export default function LeaveManagement() {
   });
 
   const filtered = leaves.filter((l: any) => l.type?.toLowerCase().includes(search.toLowerCase()) || l.reason?.toLowerCase().includes(search.toLowerCase()));
-
-  const statusColor = (s: string) => {
-    if (s === "approved") return "default";
-    if (s === "rejected") return "destructive";
-    return "secondary";
-  };
+  const statusColor = (s: string) => { if (s === "approved") return "default"; if (s === "rejected") return "destructive"; return "secondary"; };
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -65,15 +61,7 @@ export default function LeaveManagement() {
           <DialogContent>
             <DialogHeader><DialogTitle>New Leave Request</DialogTitle></DialogHeader>
             <div className="space-y-3">
-              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="annual">Annual</SelectItem>
-                  <SelectItem value="sick">Sick</SelectItem>
-                  <SelectItem value="emergency">Emergency</SelectItem>
-                  <SelectItem value="unpaid">Unpaid</SelectItem>
-                </SelectContent>
-              </Select>
+              <Select value={form.type} onValueChange={v => setForm(f => ({ ...f, type: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="annual">Annual</SelectItem><SelectItem value="sick">Sick</SelectItem><SelectItem value="emergency">Emergency</SelectItem><SelectItem value="unpaid">Unpaid</SelectItem></SelectContent></Select>
               <Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} />
               <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
               <Input type="number" min={1} placeholder="Days" value={form.days} onChange={e => setForm(f => ({ ...f, days: Number(e.target.value) }))} />
@@ -87,12 +75,18 @@ export default function LeaveManagement() {
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Employee</TableHead><TableHead>Type</TableHead><TableHead>From</TableHead><TableHead>To</TableHead><TableHead>Days</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead>
+            <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
+            <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+            <SortableHeader label="From" sortKey="start_date" direction={getSortDirection("start_date")} onToggle={toggleSort} />
+            <SortableHeader label="To" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
+            <SortableHeader label="Days" sortKey="days" direction={getSortDirection("days")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Loading...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No leave requests</TableCell></TableRow> :
-            filtered.map((l: any) => (
+            pageData.map((l: any) => (
               <TableRow key={l.id}>
                 <TableCell>{l.employees?.name ?? "—"}</TableCell>
                 <TableCell className="capitalize">{l.type}</TableCell>
@@ -112,6 +106,9 @@ export default function LeaveManagement() {
             ))}
           </TableBody>
         </Table>
+        <div className="p-4">
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   );

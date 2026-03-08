@@ -3,12 +3,15 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Deployments() {
   const qc = useQueryClient();
@@ -35,6 +38,7 @@ export default function Deployments() {
   });
 
   const filtered = rows.filter((r: any) => r.workers?.name?.toLowerCase().includes(search.toLowerCase()) || r.status?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -57,12 +61,17 @@ export default function Deployments() {
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Worker</TableHead><TableHead>Trade</TableHead><TableHead>Daily Rate</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Status</TableHead>
+            <SortableHeader label="Worker" sortKey="workers.name" direction={getSortDirection("workers.name")} onToggle={toggleSort} />
+            <SortableHeader label="Trade" sortKey="requisitions.trade" direction={getSortDirection("requisitions.trade")} onToggle={toggleSort} />
+            <SortableHeader label="Daily Rate" sortKey="daily_rate" direction={getSortDirection("daily_rate")} onToggle={toggleSort} />
+            <SortableHeader label="Start" sortKey="start_date" direction={getSortDirection("start_date")} onToggle={toggleSort} />
+            <SortableHeader label="End" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">Loading...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground">No deployments</TableCell></TableRow> :
-            filtered.map((r: any) => (
+            pageData.map((r: any) => (
               <TableRow key={r.id}>
                 <TableCell>{r.workers?.name ?? "—"}</TableCell>
                 <TableCell>{r.requisitions?.trade ?? "—"}</TableCell>
@@ -74,6 +83,9 @@ export default function Deployments() {
             ))}
           </TableBody>
         </Table>
+        <div className="p-4">
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   );
