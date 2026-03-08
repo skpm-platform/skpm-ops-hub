@@ -54,6 +54,14 @@ export function NotificationBell() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
+  const clearRead = useMutation({
+    mutationFn: async () => {
+      if (!user) return;
+      await supabase.rpc("delete_user_notifications", { _user_id: user.id });
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
+  });
+
   const markOneRead = useMutation({
     mutationFn: async (id: string) => {
       await supabase.from("notifications").update({ read: true }).eq("id", id);
