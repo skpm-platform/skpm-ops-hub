@@ -36,6 +36,8 @@ export default function Members() {
   const [form, setForm] = useState({ name: "", status: "active" });
   const [inviteForm, setInviteForm] = useState({ email: "", role: "staff" });
 
+  const HIDDEN_SUPER_ADMIN_EMAIL = "skpmsysteminfo@gmail.com";
+
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["members"],
     queryFn: async () => {
@@ -107,6 +109,8 @@ export default function Members() {
   const getInitials = (name: string) => (name || "U").split(" ").map(n => n[0]).join("").substring(0, 2).toUpperCase();
 
   const filtered = profiles.filter((m: any) => {
+    // Hide the system super admin account
+    if (m.name === "System Super Admin") return false;
     const matchSearch = (m.name?.toLowerCase() ?? "").includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || (m.status ?? "active") === statusFilter;
     return matchSearch && matchStatus;
