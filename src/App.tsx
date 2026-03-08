@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
 
 const Login = lazy(() => import("./pages/Login"));
@@ -70,11 +71,12 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
 }
 
 const App = () => (
-  <QueryClientProvider client={queryClient}>
-    <TooltipProvider>
-      <Toaster />
-      <Sonner />
-      <BrowserRouter>
+  <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <BrowserRouter>
         <AuthProvider>
           <Suspense fallback={<Loading />}>
             <Routes>
@@ -127,8 +129,9 @@ const App = () => (
           </Suspense>
         </AuthProvider>
       </BrowserRouter>
-    </TooltipProvider>
-  </QueryClientProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </ThemeProvider>
 );
 
 export default App;

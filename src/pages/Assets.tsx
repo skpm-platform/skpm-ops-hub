@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Package } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Assets() {
   const qc = useQueryClient();
@@ -30,6 +33,7 @@ export default function Assets() {
   });
 
   const filtered = data.filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -40,10 +44,21 @@ export default function Assets() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search assets..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No assets</p> : (
-          <Table><TableHeader><TableRow><TableHead>Tag</TableHead><TableHead>Name</TableHead><TableHead>Category</TableHead><TableHead>Location</TableHead><TableHead>Value (AED)</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Tag" sortKey="asset_tag" direction={getSortDirection("asset_tag")} onToggle={toggleSort} />
+            <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+            <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
+            <SortableHeader label="Location" sortKey="location" direction={getSortDirection("location")} onToggle={toggleSort} />
+            <SortableHeader label="Value (AED)" sortKey="current_value" direction={getSortDirection("current_value")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
               <TableRow key={r.id}><TableCell className="text-xs">{r.asset_tag}</TableCell><TableCell className="font-medium">{r.name}</TableCell><TableCell><Badge variant="outline">{r.category}</Badge></TableCell><TableCell>{r.location}</TableCell><TableCell>{r.current_value?.toLocaleString()}</TableCell><TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>Add Asset</DialogTitle></DialogHeader>

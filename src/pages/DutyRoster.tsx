@@ -3,13 +3,16 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function DutyRoster() {
   const qc = useQueryClient();
@@ -36,6 +39,7 @@ export default function DutyRoster() {
   });
 
   const filtered = rows.filter((r: any) => r.employees?.name?.toLowerCase().includes(search.toLowerCase()) || r.shift?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -47,14 +51,7 @@ export default function DutyRoster() {
             <DialogHeader><DialogTitle>New Roster Entry</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} />
-              <Select value={form.shift} onValueChange={v => setForm(f => ({ ...f, shift: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="day">Day</SelectItem>
-                  <SelectItem value="night">Night</SelectItem>
-                  <SelectItem value="split">Split</SelectItem>
-                </SelectContent>
-              </Select>
+              <Select value={form.shift} onValueChange={v => setForm(f => ({ ...f, shift: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="day">Day</SelectItem><SelectItem value="night">Night</SelectItem><SelectItem value="split">Split</SelectItem></SelectContent></Select>
               <div className="grid grid-cols-2 gap-2">
                 <Input type="time" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
                 <Input type="time" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} />
@@ -69,12 +66,18 @@ export default function DutyRoster() {
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Employee</TableHead><TableHead>Date</TableHead><TableHead>Shift</TableHead><TableHead>Start</TableHead><TableHead>End</TableHead><TableHead>Site</TableHead><TableHead>Status</TableHead>
+            <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
+            <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
+            <SortableHeader label="Shift" sortKey="shift" direction={getSortDirection("shift")} onToggle={toggleSort} />
+            <SortableHeader label="Start" sortKey="start_time" direction={getSortDirection("start_time")} onToggle={toggleSort} />
+            <SortableHeader label="End" sortKey="end_time" direction={getSortDirection("end_time")} onToggle={toggleSort} />
+            <SortableHeader label="Site" sortKey="sites.name" direction={getSortDirection("sites.name")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Loading...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No roster entries</TableCell></TableRow> :
-            filtered.map((r: any) => (
+            pageData.map((r: any) => (
               <TableRow key={r.id}>
                 <TableCell>{r.employees?.name ?? "—"}</TableCell>
                 <TableCell>{r.date ? format(new Date(r.date), "dd MMM yyyy") : "—"}</TableCell>
@@ -87,6 +90,9 @@ export default function DutyRoster() {
             ))}
           </TableBody>
         </Table>
+        <div className="p-4">
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   );

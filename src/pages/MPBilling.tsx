@@ -3,11 +3,14 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function MPBilling() {
   const qc = useQueryClient();
@@ -27,13 +30,7 @@ export default function MPBilling() {
   const save = useMutation({
     mutationFn: async () => {
       const total_amount = Number(form.total_workers) * Number(form.total_days) * Number(form.rate);
-      const { error } = await supabase.from("mp_billing").insert({
-        ...form,
-        total_workers: Number(form.total_workers),
-        total_days: Number(form.total_days),
-        rate: Number(form.rate),
-        total_amount,
-      });
+      const { error } = await supabase.from("mp_billing").insert({ ...form, total_workers: Number(form.total_workers), total_days: Number(form.total_days), rate: Number(form.rate), total_amount });
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["mp_billing"] }); setOpen(false); setForm({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), total_workers: 0, total_days: 0, rate: 0, notes: "" }); toast({ title: "Billing record created" }); },
@@ -41,8 +38,8 @@ export default function MPBilling() {
   });
 
   const filtered = rows.filter((r: any) => r.clients?.name?.toLowerCase().includes(search.toLowerCase()) || r.status?.toLowerCase().includes(search.toLowerCase()));
-
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -71,12 +68,19 @@ export default function MPBilling() {
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Period</TableHead><TableHead>Client</TableHead><TableHead>Project</TableHead><TableHead>Workers</TableHead><TableHead>Days</TableHead><TableHead>Rate</TableHead><TableHead>Total</TableHead><TableHead>Status</TableHead>
+            <SortableHeader label="Period" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
+            <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
+            <SortableHeader label="Project" sortKey="projects.name" direction={getSortDirection("projects.name")} onToggle={toggleSort} />
+            <SortableHeader label="Workers" sortKey="total_workers" direction={getSortDirection("total_workers")} onToggle={toggleSort} />
+            <SortableHeader label="Days" sortKey="total_days" direction={getSortDirection("total_days")} onToggle={toggleSort} />
+            <SortableHeader label="Rate" sortKey="rate" direction={getSortDirection("rate")} onToggle={toggleSort} />
+            <SortableHeader label="Total" sortKey="total_amount" direction={getSortDirection("total_amount")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">Loading...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground">No billing records</TableCell></TableRow> :
-            filtered.map((r: any) => (
+            pageData.map((r: any) => (
               <TableRow key={r.id}>
                 <TableCell>{months[r.month - 1]} {r.year}</TableCell>
                 <TableCell>{r.clients?.name ?? "—"}</TableCell>
@@ -90,6 +94,9 @@ export default function MPBilling() {
             ))}
           </TableBody>
         </Table>
+        <div className="p-4">
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   );

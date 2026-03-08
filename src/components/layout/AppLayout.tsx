@@ -9,6 +9,7 @@ import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Search, PanelLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 export function AppLayout() {
   const { user } = useAuth();
@@ -38,6 +39,7 @@ export function AppLayout() {
               </Button>
             </div>
             <div className="flex items-center gap-2">
+              <ThemeToggle />
               <NotificationBell />
               <Separator orientation="vertical" className="h-5" />
               <div className="flex items-center gap-2 pl-1">

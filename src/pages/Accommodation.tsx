@@ -6,10 +6,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Home } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Accommodation() {
   const qc = useQueryClient();
@@ -29,6 +32,7 @@ export default function Accommodation() {
   });
 
   const filtered = data.filter((r: any) => r.camp_name?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -39,13 +43,24 @@ export default function Accommodation() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No accommodations</p> : (
-          <Table><TableHeader><TableRow><TableHead>Camp</TableHead><TableHead>Location</TableHead><TableHead>Total Beds</TableHead><TableHead>Occupied</TableHead><TableHead>Available</TableHead><TableHead>Occupancy %</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => {
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Camp" sortKey="camp_name" direction={getSortDirection("camp_name")} onToggle={toggleSort} />
+            <SortableHeader label="Location" sortKey="location" direction={getSortDirection("location")} onToggle={toggleSort} />
+            <SortableHeader label="Total Beds" sortKey="total_beds" direction={getSortDirection("total_beds")} onToggle={toggleSort} />
+            <SortableHeader label="Occupied" sortKey="occupied_beds" direction={getSortDirection("occupied_beds")} onToggle={toggleSort} />
+            <SortableHeader label="Available" sortKey="total_beds" direction={null} onToggle={() => {}} />
+            <SortableHeader label="Occupancy %" sortKey="occupied_beds" direction={null} onToggle={() => {}} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => {
               const avail = (r.total_beds || 0) - (r.occupied_beds || 0);
               const occ = r.total_beds ? Math.round((r.occupied_beds || 0) / r.total_beds * 100) : 0;
               return (
               <TableRow key={r.id}><TableCell className="font-medium">{r.camp_name}</TableCell><TableCell>{r.location}</TableCell><TableCell>{r.total_beds}</TableCell><TableCell>{r.occupied_beds || 0}</TableCell><TableCell>{avail}</TableCell><TableCell><Badge variant={occ > 90 ? "destructive" : "default"}>{occ}%</Badge></TableCell></TableRow>
-            );})}</TableBody></Table>)}
+            );})}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>Add Camp</DialogTitle></DialogHeader>

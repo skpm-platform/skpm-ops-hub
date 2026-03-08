@@ -4,13 +4,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Plus, Search } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function GatePasses() {
   const { user } = useAuth();
@@ -38,6 +41,7 @@ export default function GatePasses() {
   });
 
   const filtered = rows.filter((r: any) => r.pass_no?.toLowerCase().includes(search.toLowerCase()) || r.workers?.name?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -49,15 +53,7 @@ export default function GatePasses() {
             <DialogHeader><DialogTitle>Issue Gate Pass</DialogTitle></DialogHeader>
             <div className="space-y-3">
               <Input placeholder="Pass No." value={form.pass_no} onChange={e => setForm(f => ({ ...f, pass_no: e.target.value }))} />
-              <Select value={form.pass_type} onValueChange={v => setForm(f => ({ ...f, pass_type: v }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="entry">Entry</SelectItem>
-                  <SelectItem value="exit">Exit</SelectItem>
-                  <SelectItem value="material">Material</SelectItem>
-                  <SelectItem value="vehicle">Vehicle</SelectItem>
-                </SelectContent>
-              </Select>
+              <Select value={form.pass_type} onValueChange={v => setForm(f => ({ ...f, pass_type: v }))}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="entry">Entry</SelectItem><SelectItem value="exit">Exit</SelectItem><SelectItem value="material">Material</SelectItem><SelectItem value="vehicle">Vehicle</SelectItem></SelectContent></Select>
               <Input type="date" value={form.valid_from} onChange={e => setForm(f => ({ ...f, valid_from: e.target.value }))} />
               <Input type="date" value={form.valid_until} onChange={e => setForm(f => ({ ...f, valid_until: e.target.value }))} />
               <Input placeholder="Notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
@@ -70,12 +66,18 @@ export default function GatePasses() {
       <div className="rounded-lg border bg-card">
         <Table>
           <TableHeader><TableRow>
-            <TableHead>Pass No</TableHead><TableHead>Type</TableHead><TableHead>Worker</TableHead><TableHead>Site</TableHead><TableHead>Valid From</TableHead><TableHead>Valid Until</TableHead><TableHead>Status</TableHead>
+            <SortableHeader label="Pass No" sortKey="pass_no" direction={getSortDirection("pass_no")} onToggle={toggleSort} />
+            <SortableHeader label="Type" sortKey="pass_type" direction={getSortDirection("pass_type")} onToggle={toggleSort} />
+            <SortableHeader label="Worker" sortKey="workers.name" direction={getSortDirection("workers.name")} onToggle={toggleSort} />
+            <SortableHeader label="Site" sortKey="sites.name" direction={getSortDirection("sites.name")} onToggle={toggleSort} />
+            <SortableHeader label="Valid From" sortKey="valid_from" direction={getSortDirection("valid_from")} onToggle={toggleSort} />
+            <SortableHeader label="Valid Until" sortKey="valid_until" direction={getSortDirection("valid_until")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
           </TableRow></TableHeader>
           <TableBody>
             {isLoading ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">Loading...</TableCell></TableRow> :
             filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground">No gate passes</TableCell></TableRow> :
-            filtered.map((r: any) => (
+            pageData.map((r: any) => (
               <TableRow key={r.id}>
                 <TableCell className="font-mono">{r.pass_no ?? "—"}</TableCell>
                 <TableCell className="capitalize">{r.pass_type}</TableCell>
@@ -88,6 +90,9 @@ export default function GatePasses() {
             ))}
           </TableBody>
         </Table>
+        <div className="p-4">
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+        </div>
       </div>
     </div>
   );
