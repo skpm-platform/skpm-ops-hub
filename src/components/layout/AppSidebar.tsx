@@ -86,9 +86,11 @@ const navGroups: NavGroup[] = [
     { title: "Helpdesk", url: "/helpdesk", icon: Monitor },
     { title: "Visitor Log", url: "/visitor-log", icon: Contact },
   ]},
-  { label: "System", adminOnly: true, items: [
+  { label: "Admin", adminOnly: true, items: [
     { title: "Members", url: "/members", icon: UserCheck, adminOnly: true },
     { title: "Audit Logs", url: "/audit-logs", icon: ClipboardList, adminOnly: true },
+  ]},
+  { label: "System", items: [
     { title: "Settings", url: "/settings", icon: Settings },
   ]},
 ];
