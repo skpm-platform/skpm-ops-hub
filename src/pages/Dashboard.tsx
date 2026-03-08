@@ -34,7 +34,7 @@ export default function Dashboard() {
   const { data: tasks } = useQuery({
     queryKey: ["dashboard-tasks"],
     queryFn: async () => {
-      const { data } = await supabase.from("tasks").select("*");
+      const { data } = await supabase.from("tasks").select("id,status,priority").limit(500);
       return data ?? [];
     },
   });
