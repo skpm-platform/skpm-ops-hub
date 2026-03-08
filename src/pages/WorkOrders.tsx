@@ -64,7 +64,8 @@ export default function WorkOrders() {
         const { error } = await supabase.from("work_orders").update(result.data).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await supabase.from("work_orders").insert({ ...result.data, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id });
+        const insertData = { ...result.data, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id };
+        const { error } = await supabase.from("work_orders").insert(insertData);
         if (error) throw error;
       }
     },
