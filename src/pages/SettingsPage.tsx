@@ -235,7 +235,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div><p className="font-medium text-sm">Dark Mode</p><p className="text-xs text-muted-foreground">Toggle dark theme</p></div>
-                <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+                <Switch checked={theme === "dark"} onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} />
               </div>
             </CardContent>
           </Card>
