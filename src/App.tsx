@@ -45,6 +45,10 @@ const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const LeaveManagement = lazy(() => import("./pages/LeaveManagement"));
 const Requisitions2 = lazy(() => import("./pages/Requisitions"));
 const Deployments = lazy(() => import("./pages/Deployments"));
+const GatePasses = lazy(() => import("./pages/GatePasses"));
+const Timesheets = lazy(() => import("./pages/Timesheets"));
+const DutyRoster = lazy(() => import("./pages/DutyRoster"));
+const MPBilling = lazy(() => import("./pages/MPBilling"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -96,6 +100,10 @@ const App = () => (
                 <Route path="requisitions" element={<Requisitions2 />} />
                 <Route path="deployments" element={<Deployments />} />
                 <Route path="payroll" element={<Payroll />} />
+                <Route path="timesheets" element={<Timesheets />} />
+                <Route path="duty-roster" element={<DutyRoster />} />
+                <Route path="gate-passes" element={<GatePasses />} />
+                <Route path="mp-billing" element={<MPBilling />} />
                 <Route path="assets" element={<Assets />} />
                 <Route path="warehouse" element={<Warehouse />} />
                 <Route path="hse" element={<HSE />} />

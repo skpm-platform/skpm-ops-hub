@@ -5,6 +5,7 @@ import {
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
   Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
+  KeyRound, Timer, CalendarClock, Banknote,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -42,6 +43,12 @@ const navGroups = [
     { title: "Requisitions", url: "/requisitions", icon: Send },
     { title: "Deployments", url: "/deployments", icon: CalendarPlus },
     { title: "Payroll", url: "/payroll", icon: Wallet },
+    { title: "Timesheets", url: "/timesheets", icon: Timer },
+    { title: "Duty Roster", url: "/duty-roster", icon: CalendarClock },
+  ]},
+  { label: "Site Access", items: [
+    { title: "Gate Passes", url: "/gate-passes", icon: KeyRound },
+    { title: "MP Billing", url: "/mp-billing", icon: Banknote },
   ]},
   { label: "Assets & Inventory", items: [
     { title: "Assets", url: "/assets", icon: Package },

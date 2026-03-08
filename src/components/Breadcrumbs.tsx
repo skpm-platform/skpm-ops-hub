@@ -14,6 +14,8 @@ const nameMap: Record<string, string> = {
   transport: "Transport", calendar: "Calendar", announcements: "Announcements",
   documents: "Documents", reports: "Reports", "visitor-log": "Visitor Log", helpdesk: "Helpdesk",
   members: "Members", "audit-logs": "Audit Logs", settings: "Settings",
+  timesheets: "Timesheets", "duty-roster": "Duty Roster", "gate-passes": "Gate Passes",
+  "mp-billing": "MP Billing",
 };
 
 export function Breadcrumbs() {
