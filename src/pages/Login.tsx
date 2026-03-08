@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import skpmLogo from "@/assets/skpm-logo.png";
+import { useSystemSetting } from "@/hooks/use-system-settings";
 
 export default function Login() {
   const [email, setEmail] = useState("");
