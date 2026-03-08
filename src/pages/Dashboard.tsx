@@ -44,10 +44,10 @@ export default function Dashboard() {
   });
 
   const { data: transactions } = useQuery({
-    queryKey: ["dashboard-transactions"],
+    queryKey: ["dashboard-transactions", rangeMonths],
     queryFn: async () => {
-      const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
-      const { data } = await supabase.from("transactions").select("date,type,amount,category").gte("date", sixMonthsAgo).order("date", { ascending: true });
+      const rangeAgo = format(subMonths(new Date(), rangeMonths), "yyyy-MM-dd");
+      const { data } = await supabase.from("transactions").select("date,type,amount,category").gte("date", rangeAgo).order("date", { ascending: true });
       return data ?? [];
     },
   });
