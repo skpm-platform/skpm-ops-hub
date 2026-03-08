@@ -26,8 +26,8 @@ export default function Dashboard() {
   const { data: employees } = useQuery({
     queryKey: ["dashboard-employees"],
     queryFn: async () => {
-      const { data, count } = await supabase.from("employees").select("*", { count: "exact" });
-      return { list: data ?? [], count: count ?? 0 };
+      const { count } = await supabase.from("employees").select("*", { count: "exact", head: true });
+      return { count: count ?? 0 };
     },
   });
 
