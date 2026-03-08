@@ -16,6 +16,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const { data: role } = useUserRole();
   const isAdmin = role === "admin";
+  const [dateRange, setDateRange] = useState("6m");
+  const rangeMonths = dateRange === "1m" ? 1 : dateRange === "3m" ? 3 : dateRange === "6m" ? 6 : 12;
 
   const { data: profiles } = useQuery({
     queryKey: ["dashboard-profiles"],
