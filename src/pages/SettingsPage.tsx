@@ -140,14 +140,11 @@ export default function SettingsPage() {
   const updateUserRole = useMutation({
     mutationFn: async () => {
       if (!selectedUser) return;
-      const existing = allRoles?.find(r => r.user_id === selectedUser.user_id);
-      if (existing) {
-        const { error } = await supabase.from("user_roles").update({ role: selectedRole as any }).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("user_roles").insert({ user_id: selectedUser.user_id, role: selectedRole as any });
-        if (error) throw error;
-      }
+      const { error } = await supabase.rpc("admin_update_user_role", {
+        _target_user_id: selectedUser.user_id,
+        _new_role: selectedRole,
+      });
+      if (error) throw error;
       await logAudit("Changed user role", `${selectedUser.name ?? selectedUser.user_id} → ${selectedRole}`);
     },
     onSuccess: () => {
