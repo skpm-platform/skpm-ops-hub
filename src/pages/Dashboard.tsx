@@ -18,8 +18,8 @@ export default function Dashboard() {
   const { data: profiles } = useQuery({
     queryKey: ["dashboard-profiles"],
     queryFn: async () => {
-      const { data, count } = await supabase.from("profiles").select("*", { count: "exact" });
-      return { list: data ?? [], count: count ?? 0 };
+      const { count } = await supabase.from("profiles").select("*", { count: "exact", head: true });
+      return { count: count ?? 0 };
     },
   });
 
