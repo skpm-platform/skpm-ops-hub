@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, FileText, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -96,6 +97,8 @@ export default function Contracts() {
   const expiringSoon = data.filter((r:any)=>r.end_date && new Date(r.end_date) < new Date(Date.now()+30*86400000) && r.status==="active").length;
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
+  const expiringContracts = data.filter((r: any) => r.end_date && new Date(r.end_date) < new Date(Date.now() + 90 * 86400000) && r.status === "active");
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -105,6 +108,26 @@ export default function Contracts() {
           <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Contract</Button>
         </div>
       </div>
+
+      {/* Expiry Alert Banner */}
+      {expiringContracts.length > 0 && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 mb-2"><AlertTriangle className="h-4 w-4 text-warning" /><span className="text-sm font-medium">Contracts Expiring Within 90 Days</span></div>
+            <div className="space-y-1">
+              {expiringContracts.slice(0, 5).map((c: any) => {
+                const daysLeft = Math.ceil((new Date(c.end_date).getTime() - Date.now()) / 86400000);
+                return (
+                  <div key={c.id} className="flex items-center justify-between text-xs">
+                    <span className="font-medium">{c.contract_no} — {c.clients?.name || "Unknown"}</span>
+                    <Badge variant={daysLeft <= 30 ? "destructive" : "secondary"} className="text-[10px]">{daysLeft} days left</Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Value</p><p className="text-2xl font-bold">AED {totalValue.toLocaleString()}</p></CardContent></Card>

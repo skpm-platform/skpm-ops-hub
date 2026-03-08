@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Search, PanelLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useIdleTimeout } from "@/hooks/use-idle-timeout";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export function AppLayout() {
   const { user } = useAuth();
@@ -19,6 +21,8 @@ export function AppLayout() {
   const displayName = profile?.name || user?.email?.split("@")[0] || "User";
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Staff";
+  useIdleTimeout();
+  useKeyboardShortcuts();
 
   return (
     <SidebarProvider>
