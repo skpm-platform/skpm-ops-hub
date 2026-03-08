@@ -412,6 +412,60 @@ export type Database = {
         }
         Relationships: []
       }
+      duty_roster: {
+        Row: {
+          created_at: string
+          date: string
+          employee_id: string | null
+          end_time: string | null
+          id: string
+          notes: string | null
+          shift: string | null
+          site_id: string | null
+          start_time: string | null
+          status: string | null
+        }
+        Insert: {
+          created_at?: string
+          date?: string
+          employee_id?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          shift?: string | null
+          site_id?: string | null
+          start_time?: string | null
+          status?: string | null
+        }
+        Update: {
+          created_at?: string
+          date?: string
+          employee_id?: string | null
+          end_time?: string | null
+          id?: string
+          notes?: string | null
+          shift?: string | null
+          site_id?: string | null
+          start_time?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "duty_roster_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "duty_roster_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       employees: {
         Row: {
           created_at: string
@@ -583,6 +637,63 @@ export type Database = {
             columns: ["client_id"]
             isOneToOne: false
             referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      gate_passes: {
+        Row: {
+          created_at: string
+          id: string
+          issued_by: string | null
+          notes: string | null
+          pass_no: string | null
+          pass_type: string | null
+          site_id: string | null
+          status: string | null
+          valid_from: string | null
+          valid_until: string | null
+          worker_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          issued_by?: string | null
+          notes?: string | null
+          pass_no?: string | null
+          pass_type?: string | null
+          site_id?: string | null
+          status?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+          worker_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          issued_by?: string | null
+          notes?: string | null
+          pass_no?: string | null
+          pass_type?: string | null
+          site_id?: string | null
+          status?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+          worker_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "gate_passes_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "gate_passes_worker_id_fkey"
+            columns: ["worker_id"]
+            isOneToOne: false
+            referencedRelation: "workers"
             referencedColumns: ["id"]
           },
         ]
@@ -902,6 +1013,66 @@ export type Database = {
           type?: string | null
         }
         Relationships: []
+      }
+      mp_billing: {
+        Row: {
+          client_id: string | null
+          created_at: string
+          id: string
+          month: number
+          notes: string | null
+          project_id: string | null
+          rate: number | null
+          status: string | null
+          total_amount: number | null
+          total_days: number | null
+          total_workers: number | null
+          year: number
+        }
+        Insert: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          month?: number
+          notes?: string | null
+          project_id?: string | null
+          rate?: number | null
+          status?: string | null
+          total_amount?: number | null
+          total_days?: number | null
+          total_workers?: number | null
+          year?: number
+        }
+        Update: {
+          client_id?: string | null
+          created_at?: string
+          id?: string
+          month?: number
+          notes?: string | null
+          project_id?: string | null
+          rate?: number | null
+          status?: string | null
+          total_amount?: number | null
+          total_days?: number | null
+          total_workers?: number | null
+          year?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mp_billing_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "mp_billing_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       notifications: {
         Row: {
@@ -1328,6 +1499,70 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      timesheets: {
+        Row: {
+          approved_by: string | null
+          created_at: string
+          date: string
+          employee_id: string | null
+          hours_worked: number | null
+          id: string
+          notes: string | null
+          overtime_hours: number | null
+          project_id: string | null
+          site_id: string | null
+          status: string | null
+        }
+        Insert: {
+          approved_by?: string | null
+          created_at?: string
+          date?: string
+          employee_id?: string | null
+          hours_worked?: number | null
+          id?: string
+          notes?: string | null
+          overtime_hours?: number | null
+          project_id?: string | null
+          site_id?: string | null
+          status?: string | null
+        }
+        Update: {
+          approved_by?: string | null
+          created_at?: string
+          date?: string
+          employee_id?: string | null
+          hours_worked?: number | null
+          id?: string
+          notes?: string | null
+          overtime_hours?: number | null
+          project_id?: string | null
+          site_id?: string | null
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "timesheets_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "timesheets_site_id_fkey"
+            columns: ["site_id"]
+            isOneToOne: false
+            referencedRelation: "sites"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       training_programs: {
         Row: {
