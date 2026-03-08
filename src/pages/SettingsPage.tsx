@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { logAudit } from "@/lib/audit";
+import { PasswordStrengthMeter, isPasswordStrong } from "@/components/PasswordStrengthMeter";
 
 function CompanySettingsTab() {
   const updateSetting = useUpdateSystemSetting();
