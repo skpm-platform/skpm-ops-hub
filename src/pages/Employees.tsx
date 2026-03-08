@@ -168,9 +168,7 @@ export default function Employees() {
           <BulkActions selectedIds={bulk.selectedIds} totalItems={pageData.length} onSelectAll={bulk.selectAll} onClearSelection={bulk.clearSelection} onBulkDelete={() => bulkDelete.mutate()} allSelected={bulk.allSelected} />
           <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
-            <SortableHeader label="" sortKey="" direction={null} onToggle={() => {}}>
-              <Checkbox checked={bulk.allSelected} onCheckedChange={(c) => bulk.selectAll(!!c)} />
-            </SortableHeader>
+            <TableHead className="w-10"><Checkbox checked={bulk.allSelected} onCheckedChange={(c) => bulk.selectAll(!!c)} /></TableHead>
             <SortableHeader label="ID" sortKey="employee_id" direction={getSortDirection("employee_id")} onToggle={toggleSort} />
             <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
             <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
