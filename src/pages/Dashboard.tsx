@@ -197,12 +197,24 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-semibold text-foreground tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
         </div>
         <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
+            <Select value={dateRange} onValueChange={setDateRange}>
+              <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="1m">Last Month</SelectItem>
+                <SelectItem value="3m">Last 3 Months</SelectItem>
+                <SelectItem value="6m">Last 6 Months</SelectItem>
+                <SelectItem value="12m">Last 12 Months</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {isAdmin && (
             <Button variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={handleFullExport}>
               <Download className="h-3.5 w-3.5" /> Export All Data
