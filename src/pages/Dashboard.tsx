@@ -76,7 +76,7 @@ export default function Dashboard() {
   const { data: invoices } = useQuery({
     queryKey: ["dashboard-invoices"],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("*");
+      const { data } = await supabase.from("invoices").select("id,status,total").limit(500);
       return data ?? [];
     },
   });
