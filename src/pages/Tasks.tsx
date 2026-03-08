@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -7,30 +11,16 @@ import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, GripVertical } from "lucide-react";
+import { Plus, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-interface Task {
-  id: string;
-  title: string;
-  description: string;
-  status: "todo" | "in_progress" | "done";
-  priority: "low" | "medium" | "high";
-  assignedTo: string;
-  dueDate: string;
-}
+type TaskStatus = "todo" | "in_progress" | "review" | "done";
+type TaskPriority = "low" | "medium" | "high";
 
-const initialTasks: Task[] = [
-  { id: "1", title: "Fix AC Unit - Floor 3", description: "Replace compressor unit", status: "todo", priority: "high", assignedTo: "Ahmad", dueDate: "2026-03-15" },
-  { id: "2", title: "Monthly safety inspection", description: "Complete checklist", status: "todo", priority: "medium", assignedTo: "Budi", dueDate: "2026-03-20" },
-  { id: "3", title: "Install new lighting", description: "LED replacement - lobby", status: "in_progress", priority: "medium", assignedTo: "Siti", dueDate: "2026-03-12" },
-  { id: "4", title: "Generator maintenance", description: "Quarterly service", status: "in_progress", priority: "high", assignedTo: "Ahmad", dueDate: "2026-03-10" },
-  { id: "5", title: "Paint exterior walls", description: "Section B completed", status: "done", priority: "low", assignedTo: "Dewi", dueDate: "2026-03-05" },
-];
-
-const columns: { key: Task["status"]; label: string; color: string }[] = [
+const columns: { key: TaskStatus; label: string; color: string }[] = [
   { key: "todo", label: "To Do", color: "bg-muted-foreground" },
   { key: "in_progress", label: "In Progress", color: "bg-warning" },
+  { key: "review", label: "Review", color: "bg-info" },
   { key: "done", label: "Done", color: "bg-success" },
 ];
 
@@ -40,21 +30,73 @@ const priorityColor: Record<string, string> = {
   low: "bg-info/15 text-info",
 };
 
+const nextStatus: Record<TaskStatus, TaskStatus | null> = {
+  todo: "in_progress",
+  in_progress: "review",
+  review: "done",
+  done: null,
+};
+const prevStatus: Record<TaskStatus, TaskStatus | null> = {
+  todo: null,
+  in_progress: "todo",
+  review: "in_progress",
+  done: "review",
+};
+
 export default function Tasks() {
-  const [tasks, setTasks] = useState(initialTasks);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", description: "", status: "todo" as Task["status"], priority: "medium" as Task["priority"], assignedTo: "", dueDate: "" });
+  const [form, setForm] = useState({ title: "", description: "", priority: "medium" as TaskPriority, dueDate: "" });
+  const [draggedId, setDraggedId] = useState<string | null>(null);
 
-  const handleAdd = () => {
-    if (!form.title) { toast.error("Title required"); return; }
-    setTasks([...tasks, { ...form, id: Date.now().toString() }]);
-    setDialogOpen(false);
-    setForm({ title: "", description: "", status: "todo", priority: "medium", assignedTo: "", dueDate: "" });
-    toast.success("Task added");
-  };
+  const { data: tasks, isLoading } = useQuery({
+    queryKey: ["tasks"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
-  const moveTask = (id: string, newStatus: Task["status"]) => {
-    setTasks(tasks.map((t) => (t.id === id ? { ...t, status: newStatus } : t)));
+  const addTask = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not logged in");
+      const { error } = await supabase.from("tasks").insert({
+        title: form.title,
+        description: form.description,
+        priority: form.priority,
+        due_date: form.dueDate || null,
+        status: "todo",
+        created_by: user.id,
+        assigned_to: user.id,
+      });
+      if (error) throw error;
+      await logAudit("Created task", form.title);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      setDialogOpen(false);
+      setForm({ title: "", description: "", priority: "medium", dueDate: "" });
+      toast.success("Task created");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const moveTask = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: TaskStatus }) => {
+      const { error } = await supabase.from("tasks").update({ status }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["tasks"] }),
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const handleDrop = (targetStatus: TaskStatus) => {
+    if (draggedId) {
+      moveTask.mutate({ id: draggedId, status: targetStatus });
+      setDraggedId(null);
+    }
   };
 
   return (
@@ -65,9 +107,7 @@ export default function Tasks() {
           <p className="text-muted-foreground">Manage work with Kanban board</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-1 h-4 w-4" /> New Task</Button>
-          </DialogTrigger>
+          <DialogTrigger asChild><Button><Plus className="mr-1 h-4 w-4" /> New Task</Button></DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Create Task</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
@@ -76,7 +116,7 @@ export default function Tasks() {
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Priority</Label>
-                  <Select value={form.priority} onValueChange={(v: Task["priority"]) => setForm({ ...form, priority: v })}>
+                  <Select value={form.priority} onValueChange={(v: TaskPriority) => setForm({ ...form, priority: v })}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="low">Low</SelectItem>
@@ -85,60 +125,71 @@ export default function Tasks() {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2"><Label>Assigned To</Label><Input value={form.assignedTo} onChange={(e) => setForm({ ...form, assignedTo: e.target.value })} /></div>
+                <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
               </div>
-              <div className="space-y-2"><Label>Due Date</Label><Input type="date" value={form.dueDate} onChange={(e) => setForm({ ...form, dueDate: e.target.value })} /></div>
-              <Button onClick={handleAdd} className="w-full">Create</Button>
+              <Button onClick={() => addTask.mutate()} className="w-full" disabled={!form.title || addTask.isPending}>
+                {addTask.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />} Create
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        {columns.map((col) => (
-          <Card key={col.key}>
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`h-2.5 w-2.5 rounded-full ${col.color}`} />
-                  <CardTitle className="text-sm font-medium">{col.label}</CardTitle>
+      {isLoading ? (
+        <div className="flex justify-center p-12"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>
+      ) : (
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          {columns.map((col) => (
+            <Card
+              key={col.key}
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={() => handleDrop(col.key)}
+              className="min-h-[200px]"
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`h-2.5 w-2.5 rounded-full ${col.color}`} />
+                    <CardTitle className="text-sm font-medium">{col.label}</CardTitle>
+                  </div>
+                  <Badge variant="secondary" className="text-xs">{(tasks ?? []).filter((t) => t.status === col.key).length}</Badge>
                 </div>
-                <Badge variant="secondary" className="text-xs">{tasks.filter((t) => t.status === col.key).length}</Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {tasks
-                .filter((t) => t.status === col.key)
-                .map((task) => (
-                  <div key={task.id} className="rounded-lg border bg-card p-3 space-y-2 hover:shadow-sm transition-shadow">
-                    <div className="flex items-start justify-between">
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {(tasks ?? [])
+                  .filter((t) => t.status === col.key)
+                  .map((task) => (
+                    <div
+                      key={task.id}
+                      draggable
+                      onDragStart={() => setDraggedId(task.id)}
+                      className="rounded-lg border bg-card p-3 space-y-2 hover:shadow-sm transition-shadow cursor-grab active:cursor-grabbing"
+                    >
                       <h4 className="text-sm font-medium leading-tight">{task.title}</h4>
-                      <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
-                    </div>
-                    {task.description && <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>}
-                    <div className="flex items-center justify-between">
-                      <Badge variant="secondary" className={`border-0 text-[10px] ${priorityColor[task.priority]}`}>{task.priority}</Badge>
-                      {task.assignedTo && <span className="text-[10px] text-muted-foreground">{task.assignedTo}</span>}
-                    </div>
-                    {col.key !== "done" && (
+                      {task.description && <p className="text-xs text-muted-foreground line-clamp-2">{task.description}</p>}
+                      <div className="flex items-center justify-between">
+                        <Badge variant="secondary" className={`border-0 text-[10px] ${priorityColor[task.priority ?? "medium"]}`}>{task.priority}</Badge>
+                        {task.due_date && <span className="text-[10px] text-muted-foreground">{task.due_date}</span>}
+                      </div>
                       <div className="flex gap-1 pt-1">
-                        {col.key === "todo" && (
-                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => moveTask(task.id, "in_progress")}>→ In Progress</Button>
+                        {prevStatus[col.key] && (
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => moveTask.mutate({ id: task.id, status: prevStatus[col.key]! })}>
+                            ← {columns.find(c => c.key === prevStatus[col.key])?.label}
+                          </Button>
                         )}
-                        {col.key === "in_progress" && (
-                          <>
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => moveTask(task.id, "todo")}>← To Do</Button>
-                            <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => moveTask(task.id, "done")}>→ Done</Button>
-                          </>
+                        {nextStatus[col.key] && (
+                          <Button size="sm" variant="ghost" className="h-6 text-[10px] px-2" onClick={() => moveTask.mutate({ id: task.id, status: nextStatus[col.key]! })}>
+                            {columns.find(c => c.key === nextStatus[col.key])?.label} →
+                          </Button>
                         )}
                       </div>
-                    )}
-                  </div>
-                ))}
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                    </div>
+                  ))}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -1,4 +1,8 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,58 +12,67 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 
-interface Member {
-  id: string;
-  name: string;
-  email: string;
-  role: string;
-  status: "active" | "inactive";
-}
-
-const initialMembers: Member[] = [
-  { id: "1", name: "Ahmad Fauzi", email: "ahmad@skpm.com", role: "Technician", status: "active" },
-  { id: "2", name: "Siti Rahayu", email: "siti@skpm.com", role: "Admin", status: "active" },
-  { id: "3", name: "Budi Santoso", email: "budi@skpm.com", role: "Engineer", status: "active" },
-  { id: "4", name: "Dewi Lestari", email: "dewi@skpm.com", role: "Manager", status: "inactive" },
-];
-
 export default function Members() {
-  const [members, setMembers] = useState<Member[]>(initialMembers);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [form, setForm] = useState<{ name: string; email: string; role: string; status: "active" | "inactive" }>({ name: "", email: "", role: "", status: "active" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState({ name: "", status: "active" });
 
-  const filtered = members.filter(
-    (m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.email.toLowerCase().includes(search.toLowerCase())
-  );
+  const { data: profiles, isLoading } = useQuery({
+    queryKey: ["members"],
+    queryFn: async () => {
+      const { data, error } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
 
-  const handleSave = () => {
-    if (!form.name || !form.email || !form.role) { toast.error("Fill all fields"); return; }
-    if (editingMember) {
-      setMembers(members.map((m) => (m.id === editingMember.id ? { ...m, ...form } : m)));
+  const { data: roles } = useQuery({
+    queryKey: ["all-roles"],
+    queryFn: async () => {
+      const { data } = await supabase.from("user_roles").select("*");
+      return data ?? [];
+    },
+  });
+
+  const updateMember = useMutation({
+    mutationFn: async ({ id, name, status }: { id: string; name: string; status: string }) => {
+      const { error } = await supabase.from("profiles").update({ name, status }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Updated member", `Updated ${name}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["members"] });
       toast.success("Member updated");
-    } else {
-      setMembers([...members, { ...form, id: Date.now().toString() }]);
-      toast.success("Member added");
-    }
-    setDialogOpen(false);
-    setEditingMember(null);
-    setForm({ name: "", email: "", role: "", status: "active" });
+      setDialogOpen(false);
+      setEditingId(null);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const getRoleForUser = (userId: string) => {
+    const role = roles?.find(r => r.user_id === userId);
+    return role?.role ?? "staff";
   };
 
-  const handleEdit = (m: Member) => {
-    setEditingMember(m);
-    setForm({ name: m.name, email: m.email, role: m.role, status: m.status });
+  const filtered = (profiles ?? []).filter(
+    (m) => (m.name?.toLowerCase() ?? "").includes(search.toLowerCase())
+  );
+
+  const handleEdit = (profile: typeof filtered[0]) => {
+    setEditingId(profile.id);
+    setForm({ name: profile.name ?? "", status: profile.status ?? "active" });
     setDialogOpen(true);
   };
 
-  const handleDelete = (id: string) => {
-    setMembers(members.filter((m) => m.id !== id));
-    toast.success("Member removed");
+  const handleSave = () => {
+    if (!editingId || !form.name) { toast.error("Fill all fields"); return; }
+    updateMember.mutate({ id: editingId, name: form.name, status: form.status });
   };
 
   return (
@@ -69,19 +82,14 @@ export default function Members() {
           <h1 className="text-2xl font-bold">Members</h1>
           <p className="text-muted-foreground">Manage your team directory</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) { setEditingMember(null); setForm({ name: "", email: "", role: "", status: "active" }); } }}>
-          <DialogTrigger asChild>
-            <Button><Plus className="mr-1 h-4 w-4" /> Add Member</Button>
-          </DialogTrigger>
+        <Dialog open={dialogOpen} onOpenChange={(o) => { setDialogOpen(o); if (!o) setEditingId(null); }}>
           <DialogContent>
-            <DialogHeader><DialogTitle>{editingMember ? "Edit" : "Add"} Member</DialogTitle></DialogHeader>
+            <DialogHeader><DialogTitle>Edit Member</DialogTitle></DialogHeader>
             <div className="space-y-4 pt-2">
               <div className="space-y-2"><Label>Name</Label><Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Email</Label><Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
-              <div className="space-y-2"><Label>Role</Label><Input value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })} /></div>
               <div className="space-y-2">
                 <Label>Status</Label>
-                <Select value={form.status} onValueChange={(v: "active" | "inactive") => setForm({ ...form, status: v })}>
+                <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Active</SelectItem>
@@ -89,7 +97,10 @@ export default function Members() {
                   </SelectContent>
                 </Select>
               </div>
-              <Button onClick={handleSave} className="w-full">Save</Button>
+              <Button onClick={handleSave} className="w-full" disabled={updateMember.isPending}>
+                {updateMember.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
+                Save
+              </Button>
             </div>
           </DialogContent>
         </Dialog>
@@ -103,44 +114,51 @@ export default function Members() {
           </div>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Member</TableHead>
-                <TableHead className="hidden sm:table-cell">Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead className="w-20">Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filtered.map((m) => (
-                <TableRow key={m.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="bg-primary/10 text-primary text-xs">{m.name.split(" ").map((n) => n[0]).join("")}</AvatarFallback>
-                      </Avatar>
-                      <span className="font-medium">{m.name}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell text-muted-foreground">{m.email}</TableCell>
-                  <TableCell>{m.role}</TableCell>
-                  <TableCell>
-                    <Badge variant={m.status === "active" ? "default" : "secondary"} className={m.status === "active" ? "bg-success/15 text-success hover:bg-success/20 border-0" : ""}>
-                      {m.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}><Pencil className="h-4 w-4" /></Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(m.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                    </div>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-6 w-6 text-muted-foreground" /></div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Member</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="w-16">Edit</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filtered.length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No members found. Sign up users to see them here.</TableCell></TableRow>
+                ) : (
+                  filtered.map((m) => (
+                    <TableRow key={m.id}>
+                      <TableCell>
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                              {(m.name ?? "U").split(" ").map((n) => n[0]).join("").substring(0, 2)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="font-medium">{m.name ?? "Unnamed"}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className="border-0 capitalize">{getRoleForUser(m.user_id)}</Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={m.status === "active" ? "default" : "secondary"} className={m.status === "active" ? "bg-success/15 text-success hover:bg-success/20 border-0" : "border-0"}>
+                          {m.status ?? "active"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <Button variant="ghost" size="icon" onClick={() => handleEdit(m)}><Pencil className="h-4 w-4" /></Button>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

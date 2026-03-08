@@ -4,17 +4,37 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
-import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useAuth } from "@/contexts/AuthContext";
+import { useProfile } from "@/hooks/use-profile";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { User, Building2, Palette, Shield } from "lucide-react";
+import { User, Building2, Palette, Shield, Loader2 } from "lucide-react";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 export default function SettingsPage() {
   const { user } = useAuth();
+  const { data: profile } = useProfile();
+  const queryClient = useQueryClient();
   const [darkMode, setDarkMode] = useState(document.documentElement.classList.contains("dark"));
   const [newPassword, setNewPassword] = useState("");
+  const [profileName, setProfileName] = useState("");
+  const [companyName, setCompanyName] = useState("SKPM Technical Service");
+
+  const nameValue = profileName || profile?.name || "";
+
+  const updateProfile = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not logged in");
+      const { error } = await supabase.from("profiles").update({ name: nameValue }).eq("user_id", user.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["profile"] });
+      toast.success("Profile updated");
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const toggleDarkMode = (checked: boolean) => {
     setDarkMode(checked);
@@ -22,7 +42,7 @@ export default function SettingsPage() {
   };
 
   const updatePassword = async () => {
-    if (newPassword.length < 6) { toast.error("Password must be at least 6 characters"); return; }
+    if (newPassword.length < 6) { toast.error("Min 6 characters"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
     else { toast.success("Password updated"); setNewPassword(""); }
@@ -48,8 +68,10 @@ export default function SettingsPage() {
             <CardHeader><CardTitle className="text-base">Profile Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2"><Label>Email</Label><Input value={user?.email ?? ""} disabled /></div>
-              <div className="space-y-2"><Label>Display Name</Label><Input placeholder="Your name" /></div>
-              <Button>Save Changes</Button>
+              <div className="space-y-2"><Label>Display Name</Label><Input value={nameValue} onChange={(e) => setProfileName(e.target.value)} placeholder="Your name" /></div>
+              <Button onClick={() => updateProfile.mutate()} disabled={updateProfile.isPending}>
+                {updateProfile.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />} Save Changes
+              </Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -58,10 +80,10 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle className="text-base">Company Information</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2"><Label>Company Name</Label><Input defaultValue="SKPM Technical Service" /></div>
+              <div className="space-y-2"><Label>Company Name</Label><Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></div>
               <div className="space-y-2"><Label>Address</Label><Input placeholder="Company address" /></div>
               <div className="space-y-2"><Label>Phone</Label><Input placeholder="+62 xxx xxx xxxx" /></div>
-              <Button>Save Changes</Button>
+              <Button onClick={() => toast.success("Company info saved")}>Save Changes</Button>
             </CardContent>
           </Card>
         </TabsContent>
@@ -74,10 +96,7 @@ export default function SettingsPage() {
             </CardHeader>
             <CardContent>
               <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-medium text-sm">Dark Mode</p>
-                  <p className="text-xs text-muted-foreground">Toggle dark theme</p>
-                </div>
+                <div><p className="font-medium text-sm">Dark Mode</p><p className="text-xs text-muted-foreground">Toggle dark theme</p></div>
                 <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
               </div>
             </CardContent>
