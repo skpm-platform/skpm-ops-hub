@@ -9,17 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Wallet } from "lucide-react";
+import { Plus, Search, Wallet, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
+import { ExportButton } from "@/components/ExportButton";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { StatusFilter } from "@/components/StatusFilter";
 
 export default function Payroll() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "", deductions: "" });
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewItem, setViewItem] = useState<any>(null);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [form, setForm] = useState({ employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "", overtime_pay: "", deductions: "", status: "draft" });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["payroll"],
@@ -27,57 +34,116 @@ export default function Payroll() {
   });
   const { data: employees = [] } = useQuery({ queryKey: ["emp-pay"], queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id,name"); return data || []; } });
 
+  const resetForm = () => setForm({ employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "", overtime_pay: "", deductions: "", status: "draft" });
+
+  const calcNet = (f: typeof form) => {
+    const b = parseFloat(f.basic_salary) || 0, h = parseFloat(f.housing_allowance) || 0, t = parseFloat(f.transport_allowance) || 0, fo = parseFloat(f.food_allowance) || 0, ot = parseFloat(f.overtime_pay) || 0, d = parseFloat(f.deductions) || 0;
+    return b + h + t + fo + ot - d;
+  };
+
   const save = useMutation({
     mutationFn: async () => {
-      const basic = parseFloat(form.basic_salary) || 0;
-      const housing = parseFloat(form.housing_allowance) || 0;
-      const transport = parseFloat(form.transport_allowance) || 0;
-      const food = parseFloat(form.food_allowance) || 0;
-      const ded = parseFloat(form.deductions) || 0;
-      const net = basic + housing + transport + food - ded;
-      const { error } = await (supabase as any).from("payroll").insert({ ...form, basic_salary: basic, housing_allowance: housing, transport_allowance: transport, food_allowance: food, deductions: ded, net_pay: net, month: parseInt(form.month), year: parseInt(form.year), employee_id: form.employee_id || null });
-      if (error) throw error;
+      const payload = { employee_id: form.employee_id || null, month: parseInt(form.month), year: parseInt(form.year), basic_salary: parseFloat(form.basic_salary) || 0, housing_allowance: parseFloat(form.housing_allowance) || 0, transport_allowance: parseFloat(form.transport_allowance) || 0, food_allowance: parseFloat(form.food_allowance) || 0, overtime_pay: parseFloat(form.overtime_pay) || 0, deductions: parseFloat(form.deductions) || 0, net_pay: calcNet(form), status: form.status };
+      if (editingId) {
+        const { error } = await (supabase as any).from("payroll").update(payload).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await (supabase as any).from("payroll").insert(payload);
+        if (error) throw error;
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payroll"] }); toast.success("Payroll added"); setOpen(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payroll"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
+  const del = useMutation({
+    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("payroll").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["payroll"] }); toast.success("Deleted"); setDeleteId(null); },
+  });
+
+  const handleEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({ employee_id: r.employee_id || "", month: String(r.month), year: String(r.year), basic_salary: String(r.basic_salary || ""), housing_allowance: String(r.housing_allowance || ""), transport_allowance: String(r.transport_allowance || ""), food_allowance: String(r.food_allowance || ""), overtime_pay: String(r.overtime_pay || ""), deductions: String(r.deductions || ""), status: r.status || "draft" });
+    setOpen(true);
+  };
+
+  const totalNet = data.reduce((s: number, r: any) => s + (r.net_pay || 0), 0);
+  const totalBasic = data.reduce((s: number, r: any) => s + (r.basic_salary || 0), 0);
+  const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+
+  const filtered = data
+    .filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
+
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3"><Wallet className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Payroll</h1></div>
-        <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Payroll</Button>
+        <div className="flex gap-2">
+          <ExportButton data={data} filename="payroll" />
+          <Button onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Payroll</Button>
+        </div>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Records</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Basic</p><p className="text-2xl font-semibold mt-1">AED {totalBasic.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Net Pay</p><p className="text-2xl font-semibold mt-1 text-primary">AED {totalNet.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Paid</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts.paid || 0}</p></CardContent></Card>
+      </div>
+
+      <StatusFilter value={statusFilter} onChange={setStatusFilter} counts={statusCounts} options={["draft", "processed", "paid"]} />
+
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No payroll records</p> : (
           <>
           <Table><TableHeader><TableRow>
             <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
-            <SortableHeader label="Month/Year" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
+            <SortableHeader label="Period" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
             <SortableHeader label="Basic" sortKey="basic_salary" direction={getSortDirection("basic_salary")} onToggle={toggleSort} />
             <SortableHeader label="Allowances" sortKey="housing_allowance" direction={getSortDirection("housing_allowance")} onToggle={toggleSort} />
+            <SortableHeader label="Overtime" sortKey="overtime_pay" direction={getSortDirection("overtime_pay")} onToggle={toggleSort} />
             <SortableHeader label="Deductions" sortKey="deductions" direction={getSortDirection("deductions")} onToggle={toggleSort} />
-            <SortableHeader label="Net Pay (AED)" sortKey="net_pay" direction={getSortDirection("net_pay")} onToggle={toggleSort} />
+            <SortableHeader label="Net Pay" sortKey="net_pay" direction={getSortDirection("net_pay")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="font-medium">{r.employees?.name || "—"}</TableCell><TableCell>{r.month}/{r.year}</TableCell><TableCell>{r.basic_salary?.toLocaleString()}</TableCell><TableCell>{((r.housing_allowance||0)+(r.transport_allowance||0)+(r.food_allowance||0)).toLocaleString()}</TableCell><TableCell className="text-destructive">{r.deductions?.toLocaleString()}</TableCell><TableCell className="font-bold">{r.net_pay?.toLocaleString()}</TableCell><TableCell><Badge variant={r.status === "paid" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
+              <TableRow key={r.id}>
+                <TableCell className="font-medium">{r.employees?.name || "—"}</TableCell>
+                <TableCell>{months[(r.month || 1) - 1]} {r.year}</TableCell>
+                <TableCell>{r.basic_salary?.toLocaleString()}</TableCell>
+                <TableCell>{((r.housing_allowance||0)+(r.transport_allowance||0)+(r.food_allowance||0)).toLocaleString()}</TableCell>
+                <TableCell className="text-success">{r.overtime_pay?.toLocaleString() || 0}</TableCell>
+                <TableCell className="text-destructive">{r.deductions?.toLocaleString()}</TableCell>
+                <TableCell className="font-bold">AED {r.net_pay?.toLocaleString()}</TableCell>
+                <TableCell><Badge variant={r.status === "paid" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => setViewItem(r)}><Eye className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
+                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>
             ))}</TableBody></Table>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </CardContent></Card>
-      <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-lg">
-        <DialogHeader><DialogTitle>Add Payroll Record</DialogTitle></DialogHeader>
+
+      <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Payroll Record</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div><Label>Employee</Label><Select value={form.employee_id} onValueChange={v => setForm({...form, employee_id: v})}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div><Label>Month</Label><Input type="number" min="1" max="12" value={form.month} onChange={e => setForm({...form, month: e.target.value})} /></div>
             <div><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({...form, year: e.target.value})} /></div>
+            <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="processed">Processed</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent></Select></div>
           </div>
           <div><Label>Basic Salary</Label><Input type="number" value={form.basic_salary} onChange={e => setForm({...form, basic_salary: e.target.value})} /></div>
           <div className="grid grid-cols-3 gap-2">
@@ -85,10 +151,35 @@ export default function Payroll() {
             <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e => setForm({...form, transport_allowance: e.target.value})} /></div>
             <div><Label>Food</Label><Input type="number" value={form.food_allowance} onChange={e => setForm({...form, food_allowance: e.target.value})} /></div>
           </div>
-          <div><Label>Deductions</Label><Input type="number" value={form.deductions} onChange={e => setForm({...form, deductions: e.target.value})} /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : "Save Payroll"}</Button>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Overtime Pay</Label><Input type="number" value={form.overtime_pay} onChange={e => setForm({...form, overtime_pay: e.target.value})} /></div>
+            <div><Label>Deductions</Label><Input type="number" value={form.deductions} onChange={e => setForm({...form, deductions: e.target.value})} /></div>
+          </div>
+          <div className="p-3 bg-muted rounded-lg text-sm">Net Pay: <strong>AED {calcNet(form).toLocaleString()}</strong></div>
+          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
         </div>
       </DialogContent></Dialog>
+
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent>
+        <DialogHeader><DialogTitle>Payroll Details</DialogTitle></DialogHeader>
+        {viewItem && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              <div><span className="text-muted-foreground">Employee:</span> {viewItem.employees?.name || "—"}</div>
+              <div><span className="text-muted-foreground">Period:</span> {months[(viewItem.month||1)-1]} {viewItem.year}</div>
+              <div><span className="text-muted-foreground">Basic:</span> AED {viewItem.basic_salary?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Housing:</span> AED {viewItem.housing_allowance?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Transport:</span> AED {viewItem.transport_allowance?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Food:</span> AED {viewItem.food_allowance?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Overtime:</span> AED {viewItem.overtime_pay?.toLocaleString()}</div>
+              <div><span className="text-muted-foreground">Deductions:</span> AED {viewItem.deductions?.toLocaleString()}</div>
+            </div>
+            <div className="p-3 bg-muted rounded-lg font-semibold">Net Pay: AED {viewItem.net_pay?.toLocaleString()}</div>
+          </div>
+        )}
+      </DialogContent></Dialog>
+
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} onConfirm={() => deleteId && del.mutate(deleteId)} />
     </div>
   );
 }
