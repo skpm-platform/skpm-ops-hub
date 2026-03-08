@@ -50,6 +50,7 @@ const GatePasses = lazy(() => import("./pages/GatePasses"));
 const Timesheets = lazy(() => import("./pages/Timesheets"));
 const DutyRoster = lazy(() => import("./pages/DutyRoster"));
 const MPBilling = lazy(() => import("./pages/MPBilling"));
+const MyProfile = lazy(() => import("./pages/MyProfile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -84,6 +85,7 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
+                <Route path="my-profile" element={<MyProfile />} />
                 <Route path="projects" element={<Projects />} />
                 <Route path="tasks" element={<Tasks />} />
                 <Route path="work-orders" element={<WorkOrders />} />

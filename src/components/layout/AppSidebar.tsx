@@ -5,12 +5,13 @@ import {
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
   Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
-  KeyRound, Timer, CalendarClock, Banknote, ChevronDown,
+  KeyRound, Timer, CalendarClock, Banknote, ChevronDown, UserCircle,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { useSystemSetting } from "@/hooks/use-system-settings";
+import { useUserRole } from "@/hooks/use-profile";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, SidebarHeader, useSidebar,
@@ -21,9 +22,13 @@ import {
 import { Separator } from "@/components/ui/separator";
 import skpmLogo from "@/assets/skpm-logo.png";
 
-const navGroups = [
+type NavItem = { title: string; url: string; icon: React.ComponentType<any>; adminOnly?: boolean; managerUp?: boolean };
+type NavGroup = { label: string; items: NavItem[]; adminOnly?: boolean };
+
+const navGroups: NavGroup[] = [
   { label: "Overview", items: [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
+    { title: "My Profile", url: "/my-profile", icon: UserCircle },
   ]},
   { label: "Operations", items: [
     { title: "Projects", url: "/projects", icon: FolderKanban },
@@ -32,11 +37,11 @@ const navGroups = [
     { title: "Maintenance", url: "/maintenance", icon: CalendarIcon },
   ]},
   { label: "Finance", items: [
-    { title: "Finance", url: "/finance", icon: DollarSign },
+    { title: "Finance", url: "/finance", icon: DollarSign, managerUp: true },
     { title: "Quotations", url: "/quotations", icon: FileSignature },
     { title: "Invoices", url: "/invoices", icon: Receipt },
     { title: "Expenses", url: "/expenses", icon: CreditCard },
-    { title: "Purchase Orders", url: "/purchase-orders", icon: ShoppingCart },
+    { title: "Purchase Orders", url: "/purchase-orders", icon: ShoppingCart, managerUp: true },
   ]},
   { label: "Clients & Contracts", items: [
     { title: "Clients", url: "/clients", icon: Briefcase },
@@ -49,13 +54,13 @@ const navGroups = [
     { title: "Manpower", url: "/manpower", icon: HardHat },
     { title: "Requisitions", url: "/requisitions", icon: Send },
     { title: "Deployments", url: "/deployments", icon: CalendarPlus },
-    { title: "Payroll", url: "/payroll", icon: Wallet },
+    { title: "Payroll", url: "/payroll", icon: Wallet, managerUp: true },
     { title: "Timesheets", url: "/timesheets", icon: Timer },
     { title: "Duty Roster", url: "/duty-roster", icon: CalendarClock },
   ]},
   { label: "Site Access", items: [
     { title: "Gate Passes", url: "/gate-passes", icon: KeyRound },
-    { title: "MP Billing", url: "/mp-billing", icon: Banknote },
+    { title: "MP Billing", url: "/mp-billing", icon: Banknote, managerUp: true },
   ]},
   { label: "Assets & Inventory", items: [
     { title: "Assets", url: "/assets", icon: Package },
@@ -81,9 +86,9 @@ const navGroups = [
     { title: "Helpdesk", url: "/helpdesk", icon: Monitor },
     { title: "Visitor Log", url: "/visitor-log", icon: Contact },
   ]},
-  { label: "System", items: [
-    { title: "Members", url: "/members", icon: UserCheck },
-    { title: "Audit Logs", url: "/audit-logs", icon: ClipboardList },
+  { label: "System", adminOnly: true, items: [
+    { title: "Members", url: "/members", icon: UserCheck, adminOnly: true },
+    { title: "Audit Logs", url: "/audit-logs", icon: ClipboardList, adminOnly: true },
     { title: "Settings", url: "/settings", icon: Settings },
   ]},
 ];
@@ -94,11 +99,29 @@ export function AppSidebar() {
   const { signOut } = useAuth();
   const location = useLocation();
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
+  const { data: role } = useUserRole();
+  const userRole = role ?? "staff";
+  const isAdmin = userRole === "admin";
+  const isManagerUp = userRole === "admin" || userRole === "manager";
 
   const logoSrc = companyLogoUrl || skpmLogo;
 
   const isActive = (url: string) => url === "/" ? location.pathname === "/" : location.pathname.startsWith(url);
   const groupHasActive = (items: { url: string }[]) => items.some((i) => isActive(i.url));
+
+  const filterItems = (items: NavItem[]) => items.filter(item => {
+    if (item.adminOnly && !isAdmin) return false;
+    if (item.managerUp && !isManagerUp) return false;
+    return true;
+  });
+
+  const visibleGroups = navGroups.map(g => ({
+    ...g,
+    items: filterItems(g.items),
+  })).filter(g => {
+    if (g.adminOnly && !isAdmin) return false;
+    return g.items.length > 0;
+  });
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -117,7 +140,7 @@ export function AppSidebar() {
       <Separator className="bg-sidebar-border mx-3 w-auto" />
 
       <SidebarContent className="px-2 py-2">
-        {navGroups.map((group) => {
+        {visibleGroups.map((group) => {
           const active = groupHasActive(group.items);
 
           if (collapsed) {

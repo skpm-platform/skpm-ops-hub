@@ -1,14 +1,19 @@
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/use-profile";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase } from "lucide-react";
-import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell } from "recharts";
+import { Button } from "@/components/ui/button";
+import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase, Download, Shield } from "lucide-react";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import * as XLSX from "xlsx";
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const { data: role } = useUserRole();
+  const isAdmin = role === "admin";
 
   const { data: profiles } = useQuery({
     queryKey: ["dashboard-profiles"],
@@ -54,7 +59,7 @@ export default function Dashboard() {
   const { data: auditLogs } = useQuery({
     queryKey: ["dashboard-audit"],
     queryFn: async () => {
-      const { data } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(8);
+      const { data } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(10);
       return data ?? [];
     },
   });
@@ -83,6 +88,30 @@ export default function Dashboard() {
     },
   });
 
+  const { data: hseIncidents } = useQuery({
+    queryKey: ["dashboard-hse"],
+    queryFn: async () => {
+      const { data } = await supabase.from("hse_incidents").select("*").eq("status", "open");
+      return data ?? [];
+    },
+  });
+
+  const { data: leaveRequests } = useQuery({
+    queryKey: ["dashboard-pending-leaves"],
+    queryFn: async () => {
+      const { data } = await supabase.from("leave_requests").select("*").eq("status", "pending");
+      return data ?? [];
+    },
+  });
+
+  const { data: expensesPending } = useQuery({
+    queryKey: ["dashboard-pending-expenses"],
+    queryFn: async () => {
+      const { data } = await supabase.from("expenses").select("*").eq("status", "pending");
+      return data ?? [];
+    },
+  });
+
   // Revenue chart
   const revenueChart = Array.from({ length: 6 }, (_, i) => {
     const month = subMonths(new Date(), 5 - i);
@@ -96,6 +125,15 @@ export default function Dashboard() {
     };
   });
 
+  // Expense category breakdown
+  const expenseByCategory = (transactions ?? []).filter(t => t.type === "expense").reduce((acc, t) => {
+    const cat = t.category || "Uncategorized";
+    acc[cat] = (acc[cat] || 0) + Number(t.amount);
+    return acc;
+  }, {} as Record<string, number>);
+  const expensePieData = Object.entries(expenseByCategory).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value).slice(0, 6);
+  const pieColors = ["hsl(var(--primary))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--info))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))"];
+
   const totalIncome = (transactions ?? []).filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = (transactions ?? []).filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
   const employeeCount = employees?.count ?? 0;
@@ -107,6 +145,9 @@ export default function Dashboard() {
   const openWO = workOrders?.filter(w => w.status === "open").length ?? 0;
   const unpaidInvoices = invoices?.filter(i => i.status !== "paid").length ?? 0;
   const unpaidTotal = invoices?.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.total || 0), 0) ?? 0;
+  const openHSE = hseIncidents?.length ?? 0;
+  const pendingLeaves = leaveRequests?.length ?? 0;
+  const pendingExpenses = expensesPending?.length ?? 0;
 
   // Task distribution for pie chart
   const taskDist = [
@@ -116,16 +157,38 @@ export default function Dashboard() {
     { name: "Done", value: tasks?.filter(t => t.status === "done").length ?? 0, color: "hsl(var(--success))" },
   ].filter(d => d.value > 0);
 
+  // Project status distribution
+  const projectDist = [
+    { name: "Active", value: projects?.filter(p => p.status === "active").length ?? 0, color: "hsl(var(--success))" },
+    { name: "On Hold", value: projects?.filter(p => p.status === "on_hold").length ?? 0, color: "hsl(var(--warning))" },
+    { name: "Completed", value: projects?.filter(p => p.status === "completed").length ?? 0, color: "hsl(var(--info))" },
+    { name: "Cancelled", value: projects?.filter(p => p.status === "cancelled").length ?? 0, color: "hsl(var(--destructive))" },
+  ].filter(d => d.value > 0);
+
   const kpis = [
     { title: "Employees", value: employeeCount.toString(), sub: `${presentToday} present today`, icon: Users, trend: "up" as const, color: "text-primary" },
     { title: "Attendance Rate", value: `${attendanceRate}%`, sub: `${presentToday} of ${employeeCount}`, icon: Clock, trend: attendanceRate >= 80 ? "up" as const : "down" as const, color: "text-info" },
     { title: "Revenue", value: `AED ${totalIncome.toLocaleString()}`, sub: `AED ${totalExpense.toLocaleString()} spent`, icon: DollarSign, trend: "up" as const, color: "text-success" },
     { title: "Open Tasks", value: openTasks.toString(), sub: `${highPriority} high priority`, icon: CheckSquare, trend: openTasks > 10 ? "down" as const : "up" as const, color: "text-warning" },
     { title: "Active Projects", value: activeProjects.length.toString(), sub: `${projects?.length ?? 0} total`, icon: Briefcase, trend: "up" as const, color: "text-primary" },
-    { title: "Open Work Orders", value: openWO.toString(), sub: `${workOrders?.length ?? 0} total`, icon: Building2, trend: openWO > 5 ? "down" as const : "up" as const, color: "text-info" },
     { title: "Unpaid Invoices", value: unpaidInvoices.toString(), sub: `AED ${unpaidTotal.toLocaleString()} outstanding`, icon: FileText, trend: unpaidInvoices > 0 ? "down" as const : "up" as const, color: "text-warning" },
+    { title: "HSE Incidents", value: openHSE.toString(), sub: `${openHSE} open incidents`, icon: Shield, trend: openHSE > 0 ? "down" as const : "up" as const, color: "text-destructive" },
     { title: "Net Profit", value: `AED ${(totalIncome - totalExpense).toLocaleString()}`, sub: totalIncome > totalExpense ? "Profitable" : "Loss", icon: TrendingUp, trend: totalIncome >= totalExpense ? "up" as const : "down" as const, color: "text-success" },
   ];
+
+  // Full system export
+  const handleFullExport = async () => {
+    const tables = ["employees", "projects", "tasks", "invoices", "expenses", "attendance", "work_orders", "clients", "contracts", "assets"] as const;
+    const wb = XLSX.utils.book_new();
+    for (const table of tables) {
+      const { data } = await supabase.from(table).select("*");
+      if (data && data.length > 0) {
+        const ws = XLSX.utils.json_to_sheet(data);
+        XLSX.utils.book_append_sheet(wb, ws, table.charAt(0).toUpperCase() + table.slice(1).replace(/_/g, " "));
+      }
+    }
+    XLSX.writeFile(wb, `SKPM_Full_Export_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -134,13 +197,34 @@ export default function Dashboard() {
           <h1 className="text-xl font-semibold text-foreground tracking-tight">Dashboard</h1>
           <p className="text-sm text-muted-foreground mt-0.5">{format(new Date(), "EEEE, MMMM d, yyyy")}</p>
         </div>
-        <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 text-xs font-normal px-2.5 py-1">
-          <Activity className="h-3 w-3 text-success" />System Online
-        </Badge>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <Button variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={handleFullExport}>
+              <Download className="h-3.5 w-3.5" /> Export All Data
+            </Button>
+          )}
+          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 text-xs font-normal px-2.5 py-1">
+            <Activity className="h-3 w-3 text-success" />System Online
+          </Badge>
+        </div>
       </div>
 
-      {/* KPI Grid - 8 cards */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Pending Approvals Banner */}
+      {isAdmin && (pendingLeaves > 0 || pendingExpenses > 0) && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-3 flex items-center gap-3">
+            <AlertTriangle className="h-4 w-4 text-warning shrink-0" />
+            <p className="text-sm">
+              <span className="font-medium">Pending Approvals:</span>
+              {pendingLeaves > 0 && <span className="ml-2">{pendingLeaves} leave request(s)</span>}
+              {pendingExpenses > 0 && <span className="ml-2">• {pendingExpenses} expense(s)</span>}
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* KPI Grid */}
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
         {kpis.map((kpi) => (
           <Card key={kpi.title} className="border shadow-sm hover:shadow-md transition-shadow">
             <CardContent className="p-4">
@@ -229,6 +313,55 @@ export default function Dashboard() {
         </Card>
       </div>
 
+      {/* Second Charts Row */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        {/* Project Status */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Project Status Overview</CardTitle></CardHeader>
+          <CardContent className="flex flex-col items-center">
+            {projectDist.length > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={projectDist} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
+                      {projectDist.map((entry, i) => <Cell key={i} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px", fontSize: "12px" }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex flex-wrap gap-3 mt-2 justify-center">
+                  {projectDist.map(d => (
+                    <div key={d.name} className="flex items-center gap-1.5 text-[11px]">
+                      <div className="h-2 w-2 rounded-full" style={{ backgroundColor: d.color }} />
+                      <span className="text-muted-foreground">{d.name}</span>
+                      <span className="font-medium">{d.value}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : <p className="text-xs text-muted-foreground py-12">No projects yet</p>}
+          </CardContent>
+        </Card>
+
+        {/* Expense Breakdown */}
+        <Card className="border shadow-sm">
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Expense Breakdown by Category</CardTitle></CardHeader>
+          <CardContent>
+            {expensePieData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <BarChart data={expensePieData} layout="vertical">
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+                  <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px", fontSize: "12px" }} formatter={(v: number) => `AED ${v.toLocaleString()}`} />
+                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : <p className="text-xs text-muted-foreground py-12 text-center">No expense data</p>}
+          </CardContent>
+        </Card>
+      </div>
+
       {/* Bottom Row */}
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Active Projects */}
@@ -265,7 +398,7 @@ export default function Dashboard() {
           <CardContent>
             {auditLogs && auditLogs.length > 0 ? (
               <div className="space-y-1">
-                {auditLogs.slice(0, 6).map((log) => (
+                {auditLogs.slice(0, 8).map((log) => (
                   <div key={log.id} className="flex items-start justify-between py-1.5 border-b border-border/50 last:border-0">
                     <div className="min-w-0">
                       <p className="text-xs font-medium text-foreground truncate">{log.action}</p>
