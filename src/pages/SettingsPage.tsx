@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useSystemSetting, useUpdateSystemSetting } from "@/hooks/use-system-settings";
@@ -20,6 +20,73 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { logAudit } from "@/lib/audit";
+
+function CompanySettingsTab() {
+  const updateSetting = useUpdateSystemSetting();
+  const { data: savedName } = useSystemSetting("company_name");
+  const { data: savedLicense } = useSystemSetting("company_license");
+  const { data: savedAddress } = useSystemSetting("company_address");
+  const { data: savedPhone } = useSystemSetting("company_phone");
+  const { data: savedEmail } = useSystemSetting("company_email");
+  const { data: savedWebsite } = useSystemSetting("company_website");
+
+  const [form, setForm] = useState({ name: "", license: "", address: "", phone: "", email: "", website: "" });
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    if (!loaded && savedName !== undefined) {
+      setForm({
+        name: savedName || "SKPM Technical Service",
+        license: savedLicense || "",
+        address: savedAddress || "",
+        phone: savedPhone || "",
+        email: savedEmail || "",
+        website: savedWebsite || "",
+      });
+      setLoaded(true);
+    }
+  }, [savedName, savedLicense, savedAddress, savedPhone, savedEmail, savedWebsite, loaded]);
+
+  const [saving, setSaving] = useState(false);
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await Promise.all([
+        updateSetting.mutateAsync({ key: "company_name", value: form.name }),
+        updateSetting.mutateAsync({ key: "company_license", value: form.license }),
+        updateSetting.mutateAsync({ key: "company_address", value: form.address }),
+        updateSetting.mutateAsync({ key: "company_phone", value: form.phone }),
+        updateSetting.mutateAsync({ key: "company_email", value: form.email }),
+        updateSetting.mutateAsync({ key: "company_website", value: form.website }),
+      ]);
+      await logAudit("Updated company settings", "settings");
+      toast.success("Company settings saved");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card>
+      <CardHeader><CardTitle className="text-base">Company Information</CardTitle></CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="space-y-2"><Label>Company Name</Label><Input value={form.name} onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Trade License No.</Label><Input placeholder="TL-XXXX-XXXX" value={form.license} onChange={(e) => setForm(f => ({ ...f, license: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Address</Label><Input placeholder="Company address" value={form.address} onChange={(e) => setForm(f => ({ ...f, address: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Phone</Label><Input placeholder="+971 XX XXX XXXX" value={form.phone} onChange={(e) => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Email</Label><Input placeholder="info@company.com" value={form.email} onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))} /></div>
+          <div className="space-y-2"><Label>Website</Label><Input placeholder="www.company.com" value={form.website} onChange={(e) => setForm(f => ({ ...f, website: e.target.value }))} /></div>
+        </div>
+        <Button onClick={handleSave} size="sm" className="h-9" disabled={saving}>
+          {saving && <Loader2 className="animate-spin mr-2 h-4 w-4" />} Save Changes
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SettingsPage() {
   const { user } = useAuth();

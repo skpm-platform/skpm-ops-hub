@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function useSystemSetting(key: string) {
   return useQuery({
@@ -9,7 +10,7 @@ export function useSystemSetting(key: string) {
         .from("system_settings")
         .select("value")
         .eq("key", key)
-        .single();
+        .maybeSingle();
       return data?.value ?? null;
     },
   });
@@ -17,12 +18,14 @@ export function useSystemSetting(key: string) {
 
 export function useUpdateSystemSetting() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string | null }) => {
-      const { error } = await supabase
-        .from("system_settings")
-        .update({ value, updated_at: new Date().toISOString() })
-        .eq("key", key);
+      const { error } = await supabase.rpc("upsert_system_setting", {
+        _key: key,
+        _value: value,
+        _updated_by: user?.id ?? null,
+      });
       if (error) throw error;
     },
     onSuccess: (_, { key }) => {

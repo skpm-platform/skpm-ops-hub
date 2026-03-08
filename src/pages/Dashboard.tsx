@@ -270,7 +270,7 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Revenue vs Expenses</CardTitle>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last 6 months</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last {rangeMonths} month{rangeMonths > 1 ? "s" : ""}</span>
             </div>
           </CardHeader>
           <CardContent>
