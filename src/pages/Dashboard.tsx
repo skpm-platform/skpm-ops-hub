@@ -18,23 +18,23 @@ export default function Dashboard() {
   const { data: profiles } = useQuery({
     queryKey: ["dashboard-profiles"],
     queryFn: async () => {
-      const { data, count } = await supabase.from("profiles").select("*", { count: "exact" });
-      return { list: data ?? [], count: count ?? 0 };
+      const { count } = await supabase.from("profiles").select("*", { count: "exact", head: true });
+      return { count: count ?? 0 };
     },
   });
 
   const { data: employees } = useQuery({
     queryKey: ["dashboard-employees"],
     queryFn: async () => {
-      const { data, count } = await supabase.from("employees").select("*", { count: "exact" });
-      return { list: data ?? [], count: count ?? 0 };
+      const { count } = await supabase.from("employees").select("*", { count: "exact", head: true });
+      return { count: count ?? 0 };
     },
   });
 
   const { data: tasks } = useQuery({
     queryKey: ["dashboard-tasks"],
     queryFn: async () => {
-      const { data } = await supabase.from("tasks").select("*");
+      const { data } = await supabase.from("tasks").select("id,status,priority").limit(500);
       return data ?? [];
     },
   });
@@ -42,7 +42,8 @@ export default function Dashboard() {
   const { data: transactions } = useQuery({
     queryKey: ["dashboard-transactions"],
     queryFn: async () => {
-      const { data } = await supabase.from("transactions").select("*").order("date", { ascending: true });
+      const sixMonthsAgo = format(subMonths(new Date(), 6), "yyyy-MM-dd");
+      const { data } = await supabase.from("transactions").select("date,type,amount,category").gte("date", sixMonthsAgo).order("date", { ascending: true });
       return data ?? [];
     },
   });
@@ -75,7 +76,7 @@ export default function Dashboard() {
   const { data: invoices } = useQuery({
     queryKey: ["dashboard-invoices"],
     queryFn: async () => {
-      const { data } = await supabase.from("invoices").select("*");
+      const { data } = await supabase.from("invoices").select("id,status,total").limit(500);
       return data ?? [];
     },
   });
@@ -83,7 +84,7 @@ export default function Dashboard() {
   const { data: workOrders } = useQuery({
     queryKey: ["dashboard-work-orders"],
     queryFn: async () => {
-      const { data } = await supabase.from("work_orders").select("*");
+      const { data } = await supabase.from("work_orders").select("id,status").eq("status", "open");
       return data ?? [];
     },
   });
@@ -91,7 +92,7 @@ export default function Dashboard() {
   const { data: hseIncidents } = useQuery({
     queryKey: ["dashboard-hse"],
     queryFn: async () => {
-      const { data } = await supabase.from("hse_incidents").select("*").eq("status", "open");
+      const { data } = await supabase.from("hse_incidents").select("id").eq("status", "open");
       return data ?? [];
     },
   });
@@ -142,7 +143,7 @@ export default function Dashboard() {
   const openTasks = tasks?.filter(t => t.status !== "done").length ?? 0;
   const highPriority = tasks?.filter(t => t.priority === "high" && t.status !== "done").length ?? 0;
   const activeProjects = projects?.filter(p => p.status === "active") ?? [];
-  const openWO = workOrders?.filter(w => w.status === "open").length ?? 0;
+  const openWO = workOrders?.length ?? 0;
   const unpaidInvoices = invoices?.filter(i => i.status !== "paid").length ?? 0;
   const unpaidTotal = invoices?.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.total || 0), 0) ?? 0;
   const openHSE = hseIncidents?.length ?? 0;

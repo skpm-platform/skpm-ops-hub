@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { useTheme } from "next-themes";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { useSystemSetting, useUpdateSystemSetting } from "@/hooks/use-system-settings";
 import { Button } from "@/components/ui/button";
@@ -27,7 +28,7 @@ export default function SettingsPage() {
   const isAdmin = currentRole === "admin";
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [darkMode, setDarkMode] = useState(document.documentElement.classList.contains("dark"));
+  const { theme, setTheme } = useTheme();
   const [newPassword, setNewPassword] = useState("");
   const [profileName, setProfileName] = useState("");
   const [companyName, setCompanyName] = useState("SKPM Technical Service");
@@ -37,9 +38,17 @@ export default function SettingsPage() {
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const updateSetting = useUpdateSystemSetting();
 
+  const validateFile = (file: File, maxMB = 5) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp", "image/svg+xml"];
+    if (!allowed.includes(file.type)) { toast.error("Only JPG, PNG, WebP or SVG files allowed"); return false; }
+    if (file.size > maxMB * 1024 * 1024) { toast.error(`File must be under ${maxMB}MB`); return false; }
+    return true;
+  };
+
   const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!validateFile(file, 2)) return;
     setLogoUploading(true);
     try {
       const ext = file.name.split(".").pop();
@@ -76,6 +85,7 @@ export default function SettingsPage() {
   const handleAvatarUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
+    if (!validateFile(file, 2)) return;
     setUploading(true);
     try {
       const ext = file.name.split(".").pop();
@@ -106,13 +116,11 @@ export default function SettingsPage() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const toggleDarkMode = (checked: boolean) => {
-    setDarkMode(checked);
-    document.documentElement.classList.toggle("dark", checked);
-  };
-
   const updatePassword = async () => {
-    if (newPassword.length < 6) { toast.error("Min 6 characters"); return; }
+    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
+    if (!/[A-Z]/.test(newPassword)) { toast.error("Password must contain an uppercase letter"); return; }
+    if (!/[0-9]/.test(newPassword)) { toast.error("Password must contain a number"); return; }
+    if (!/[^A-Za-z0-9]/.test(newPassword)) { toast.error("Password must contain a special character"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
     else { toast.success("Password updated"); setNewPassword(""); }
@@ -142,14 +150,11 @@ export default function SettingsPage() {
   const updateUserRole = useMutation({
     mutationFn: async () => {
       if (!selectedUser) return;
-      const existing = allRoles?.find(r => r.user_id === selectedUser.user_id);
-      if (existing) {
-        const { error } = await supabase.from("user_roles").update({ role: selectedRole as any }).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("user_roles").insert({ user_id: selectedUser.user_id, role: selectedRole as any });
-        if (error) throw error;
-      }
+      const { error } = await supabase.rpc("admin_update_user_role", {
+        _target_user_id: selectedUser.user_id,
+        _new_role: selectedRole as "admin" | "manager" | "staff",
+      });
+      if (error) throw error;
       await logAudit("Changed user role", `${selectedUser.name ?? selectedUser.user_id} → ${selectedRole}`);
     },
     onSuccess: () => {
@@ -239,7 +244,7 @@ export default function SettingsPage() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div><p className="font-medium text-sm">Dark Mode</p><p className="text-xs text-muted-foreground">Toggle dark theme</p></div>
-                <Switch checked={darkMode} onCheckedChange={toggleDarkMode} />
+                <Switch checked={theme === "dark"} onCheckedChange={(checked) => setTheme(checked ? "dark" : "light")} />
               </div>
             </CardContent>
           </Card>
