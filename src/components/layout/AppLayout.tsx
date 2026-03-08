@@ -21,6 +21,8 @@ export function AppLayout() {
   const displayName = profile?.name || user?.email?.split("@")[0] || "User";
   const initials = displayName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
   const roleLabel = role ? role.charAt(0).toUpperCase() + role.slice(1) : "Staff";
+  useIdleTimeout();
+  useKeyboardShortcuts();
 
   return (
     <SidebarProvider>
