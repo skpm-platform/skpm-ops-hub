@@ -218,20 +218,7 @@ export default function SettingsPage() {
 
         {/* Company Tab */}
         <TabsContent value="company" className="space-y-4 mt-4">
-          <Card>
-            <CardHeader><CardTitle className="text-base">Company Information</CardTitle></CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2"><Label>Company Name</Label><Input value={companyName} onChange={(e) => setCompanyName(e.target.value)} /></div>
-                <div className="space-y-2"><Label>Trade License No.</Label><Input placeholder="TL-XXXX-XXXX" /></div>
-                <div className="space-y-2"><Label>Address</Label><Input placeholder="Company address" /></div>
-                <div className="space-y-2"><Label>Phone</Label><Input placeholder="+971 XX XXX XXXX" /></div>
-                <div className="space-y-2"><Label>Email</Label><Input placeholder="info@company.com" /></div>
-                <div className="space-y-2"><Label>Website</Label><Input placeholder="www.company.com" /></div>
-              </div>
-              <Button onClick={() => toast.success("Company info saved")} size="sm" className="h-9">Save Changes</Button>
-            </CardContent>
-          </Card>
+          <CompanySettingsTab />
         </TabsContent>
 
         {/* Appearance Tab */}
