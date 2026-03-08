@@ -36,6 +36,8 @@ export default function Members() {
   const [form, setForm] = useState({ name: "", status: "active" });
   const [inviteForm, setInviteForm] = useState({ email: "", role: "staff" });
 
+  const HIDDEN_SUPER_ADMIN_EMAIL = "skpmsysteminfo@gmail.com";
+
   const { data: profiles = [], isLoading } = useQuery({
     queryKey: ["members"],
     queryFn: async () => {
