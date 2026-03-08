@@ -332,6 +332,39 @@ export default function SettingsPage() {
         {/* System Settings (Admin Only) */}
         {isAdmin && (
           <TabsContent value="system" className="space-y-4 mt-4">
+            {/* Company Branding */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Company Branding</CardTitle>
+                <CardDescription>Upload your company logo. It will appear in the sidebar and login page.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-6">
+                  <div className="h-20 w-20 rounded-lg border border-border bg-muted flex items-center justify-center overflow-hidden shrink-0">
+                    {companyLogoUrl ? (
+                      <img src={companyLogoUrl} alt="Company Logo" className="h-full w-full object-contain" />
+                    ) : (
+                      <Building2 className="h-8 w-8 text-muted-foreground" />
+                    )}
+                  </div>
+                  <div className="space-y-2">
+                    <p className="text-sm font-medium">Company Logo</p>
+                    <p className="text-xs text-muted-foreground">Recommended: Square image, at least 256×256px. PNG or JPG.</p>
+                    <div className="flex gap-2">
+                      <input ref={logoRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
+                      <Button size="sm" className="h-9" variant="outline" onClick={() => logoRef.current?.click()} disabled={logoUploading}>
+                        {logoUploading ? <Loader2 className="animate-spin mr-2 h-4 w-4" /> : <Upload className="mr-2 h-4 w-4" />}
+                        {companyLogoUrl ? "Change Logo" : "Upload Logo"}
+                      </Button>
+                      {companyLogoUrl && (
+                        <Button size="sm" className="h-9" variant="destructive" onClick={handleRemoveLogo}>Remove</Button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <CardTitle className="text-base">System Settings</CardTitle>
