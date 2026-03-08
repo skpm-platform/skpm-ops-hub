@@ -7,16 +7,27 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, FileSignature } from "lucide-react";
+import { Plus, Search, FileSignature, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
+
+const statusColors: Record<string, string> = {
+  draft: "bg-muted text-muted-foreground",
+  sent: "bg-info/15 text-info",
+  approved: "bg-success/15 text-success",
+  rejected: "bg-destructive/15 text-destructive",
+};
 
 export default function Quotations() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ client_id: "", valid_until: "", subtotal: "", status: "draft" });
 
@@ -33,12 +44,17 @@ export default function Quotations() {
       const { error } = await (supabase as any).from("quotations").insert({ ...form, subtotal, vat, total: subtotal + vat, quote_no: `QT-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null });
       if (error) throw error;
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success("Quotation created"); setOpen(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success("Quotation created"); setOpen(false); setForm({ client_id: "", valid_until: "", subtotal: "", status: "draft" }); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => (r.quote_no || "").toLowerCase().includes(search.toLowerCase()) || (r.clients?.name || "").toLowerCase().includes(search.toLowerCase()));
-  const stC: Record<string,string> = { draft: "bg-gray-100 text-gray-700", sent: "bg-blue-100 text-blue-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-700" };
+  const totalValue = data.reduce((s: number, r: any) => s + (r.total || 0), 0);
+
+  const filtered = data
+    .filter((r: any) => (r.quote_no || "").toLowerCase().includes(search.toLowerCase()) || (r.clients?.name || "").toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
+
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -46,14 +62,46 @@ export default function Quotations() {
         <div className="flex items-center gap-3"><FileSignature className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Quotations</h1></div>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />New Quotation</Button>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Quotations</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Value</p><p className="text-2xl font-semibold mt-1">AED {totalValue.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Approved</p><p className="text-2xl font-semibold mt-1 text-success">{data.filter((r: any) => r.status === "approved").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Pending</p><p className="text-2xl font-semibold mt-1 text-warning">{data.filter((r: any) => r.status === "draft" || r.status === "sent").length}</p></CardContent></Card>
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="draft">Draft</SelectItem><SelectItem value="sent">Sent</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem></SelectContent></Select>
+        </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No quotations</p> : (
-          <Table><TableHeader><TableRow><TableHead>Quote #</TableHead><TableHead>Client</TableHead><TableHead>Total (AED)</TableHead><TableHead>Valid Until</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="font-medium">{r.quote_no}</TableCell><TableCell>{r.clients?.name || "—"}</TableCell><TableCell>{r.total?.toLocaleString()}</TableCell><TableCell>{r.valid_until}</TableCell><TableCell><Badge className={stC[r.status] || ""}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Quote #" sortKey="quote_no" direction={getSortDirection("quote_no")} onToggle={toggleSort} />
+            <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
+            <SortableHeader label="Subtotal" sortKey="subtotal" direction={getSortDirection("subtotal")} onToggle={toggleSort} />
+            <SortableHeader label="VAT" sortKey="vat" direction={getSortDirection("vat")} onToggle={toggleSort} />
+            <SortableHeader label="Total (AED)" sortKey="total" direction={getSortDirection("total")} onToggle={toggleSort} />
+            <SortableHeader label="Valid Until" sortKey="valid_until" direction={getSortDirection("valid_until")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-medium font-mono text-xs">{r.quote_no}</TableCell>
+                <TableCell>{r.clients?.name || "—"}</TableCell>
+                <TableCell>{r.subtotal?.toLocaleString()}</TableCell>
+                <TableCell className="text-muted-foreground">{r.vat?.toLocaleString()}</TableCell>
+                <TableCell className="font-medium">{r.total?.toLocaleString()}</TableCell>
+                <TableCell>{r.valid_until}</TableCell>
+                <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
+              </TableRow>
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
+
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>New Quotation</DialogTitle></DialogHeader>
         <div className="space-y-4">
