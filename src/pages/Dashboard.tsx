@@ -118,8 +118,8 @@ export default function Dashboard() {
   });
 
   // Revenue chart
-  const revenueChart = Array.from({ length: 6 }, (_, i) => {
-    const month = subMonths(new Date(), 5 - i);
+  const revenueChart = Array.from({ length: rangeMonths }, (_, i) => {
+    const month = subMonths(new Date(), rangeMonths - 1 - i);
     const start = format(startOfMonth(month), "yyyy-MM-dd");
     const end = format(endOfMonth(month), "yyyy-MM-dd");
     const monthTx = (transactions ?? []).filter(t => t.date >= start && t.date <= end);
