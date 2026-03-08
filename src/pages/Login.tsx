@@ -7,12 +7,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import skpmLogo from "@/assets/skpm-logo.png";
+import { useSystemSetting } from "@/hooks/use-system-settings";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "forgot">("login");
+  const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
+  const logoSrc = companyLogoUrl || skpmLogo;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +41,7 @@ export default function Login() {
       <Card className="w-full max-w-md animate-fade-in shadow-xl border-border/50">
         <CardHeader className="text-center space-y-4 pb-2">
           <div className="flex justify-center">
-            <img src={skpmLogo} alt="SKPM Logo" className="h-16 w-16 rounded-xl" />
+            <img src={logoSrc} alt="SKPM Logo" className="h-16 w-16 rounded-xl object-contain" />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold tracking-tight">SKPM Technical Service</CardTitle>

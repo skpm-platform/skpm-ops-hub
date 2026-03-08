@@ -10,6 +10,7 @@ import {
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
+import { useSystemSetting } from "@/hooks/use-system-settings";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, SidebarHeader, useSidebar,
@@ -92,6 +93,9 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
   const { signOut } = useAuth();
   const location = useLocation();
+  const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
+
+  const logoSrc = companyLogoUrl || skpmLogo;
 
   const isActive = (url: string) => url === "/" ? location.pathname === "/" : location.pathname.startsWith(url);
   const groupHasActive = (items: { url: string }[]) => items.some((i) => isActive(i.url));
@@ -100,7 +104,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-3">
-          <img src={skpmLogo} alt="SKPM" className="h-8 w-8 shrink-0 rounded-md" />
+          <img src={logoSrc} alt="SKPM" className="h-8 w-8 shrink-0 rounded-md object-contain" />
           {!collapsed && (
             <div className="flex flex-col leading-none">
               <span className="text-[13px] font-semibold tracking-tight text-sidebar-accent-foreground">SKPM</span>
