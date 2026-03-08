@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +19,7 @@ import { SortableHeader } from "@/components/SortableHeader";
 import { ExportButton } from "@/components/ExportButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusFilter } from "@/components/StatusFilter";
+import { quotationSchema } from "@/lib/validations";
 
 const statusColors: Record<string, string> = { draft: "bg-muted text-muted-foreground", sent: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
 
@@ -30,6 +32,9 @@ export default function Quotations() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ client_id: "", valid_until: "", subtotal: "", status: "draft" });
+  const [formErrors, setFormErrors] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["quotations"],
@@ -37,22 +42,30 @@ export default function Quotations() {
   });
   const { data: clients = [] } = useQuery({ queryKey: ["clients-q"], queryFn: async () => { const { data } = await (supabase as any).from("clients").select("id,name"); return data || []; } });
 
-  const resetForm = () => setForm({ client_id: "", valid_until: "", subtotal: "", status: "draft" });
+  const resetForm = () => { setForm({ client_id: "", valid_until: "", subtotal: "", status: "draft" }); setFormErrors({}); };
 
   const save = useMutation({
     mutationFn: async () => {
-      const subtotal = parseFloat(form.subtotal) || 0;
+      const result = quotationSchema.safeParse(form);
+      if (!result.success) {
+        const errs: Record<string, string> = {};
+        result.error.errors.forEach(e => { if (e.path[0]) errs[e.path[0] as string] = e.message; });
+        setFormErrors(errs);
+        throw new Error("Validation failed");
+      }
+      setFormErrors({});
+      const subtotal = parseFloat(result.data.subtotal) || 0;
       const vat = subtotal * 0.05;
       if (editingId) {
-        const { error } = await (supabase as any).from("quotations").update({ client_id: form.client_id || null, subtotal, vat, total: subtotal + vat, valid_until: form.valid_until || null, status: form.status }).eq("id", editingId);
+        const { error } = await (supabase as any).from("quotations").update({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, valid_until: result.data.valid_until || null, status: result.data.status }).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await (supabase as any).from("quotations").insert({ client_id: form.client_id || null, subtotal, vat, total: subtotal + vat, quote_no: `QT-${Date.now().toString().slice(-6)}`, created_by: user?.id, valid_until: form.valid_until || null, status: form.status });
+        const { error } = await (supabase as any).from("quotations").insert({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, quote_no: `QT-${Date.now().toString().slice(-6)}`, created_by: user?.id, valid_until: result.data.valid_until || null, status: result.data.status });
         if (error) throw error;
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success(editingId ? "Updated" : "Created"); setOpen(false); setEditingId(null); resetForm(); },
-    onError: (e: any) => toast.error(e.message),
+    onError: (e: any) => { if (e.message !== "Validation failed") toast.error(e.message); },
   });
 
   const del = useMutation({
@@ -60,10 +73,31 @@ export default function Quotations() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      const ids = Array.from(selected);
+      const { error } = await (supabase as any).from("quotations").delete().in("id", ids);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success(`${selected.size} items deleted`); setSelected(new Set()); setBulkDeleteOpen(false); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
     setForm({ client_id: r.client_id || "", valid_until: r.valid_until || "", subtotal: String(r.subtotal || ""), status: r.status || "draft" });
+    setFormErrors({});
     setOpen(true);
+  };
+
+  const toggleSelect = (id: string) => {
+    const next = new Set(selected);
+    next.has(id) ? next.delete(id) : next.add(id);
+    setSelected(next);
+  };
+  const toggleAll = () => {
+    if (selected.size === pageData.length) setSelected(new Set());
+    else setSelected(new Set(pageData.map((r: any) => r.id)));
   };
 
   const totalValue = data.reduce((s: number, r: any) => s + (r.total || 0), 0);
@@ -79,6 +113,7 @@ export default function Quotations() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3"><FileSignature className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Quotations</h1></div>
         <div className="flex gap-2">
+          {selected.size > 0 && <Button variant="destructive" size="sm" onClick={() => setBulkDeleteOpen(true)}><Trash2 className="h-4 w-4 mr-1" />Delete {selected.size}</Button>}
           <ExportButton data={data} filename="quotations" />
           <Button onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Quotation</Button>
         </div>
@@ -98,6 +133,7 @@ export default function Quotations() {
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No quotations</p> : (
           <>
           <Table><TableHeader><TableRow>
+            <TableCell className="w-10"><Checkbox checked={selected.size === pageData.length && pageData.length > 0} onCheckedChange={toggleAll} /></TableCell>
             <SortableHeader label="Quote #" sortKey="quote_no" direction={getSortDirection("quote_no")} onToggle={toggleSort} />
             <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
             <SortableHeader label="Subtotal" sortKey="subtotal" direction={getSortDirection("subtotal")} onToggle={toggleSort} />
@@ -108,7 +144,8 @@ export default function Quotations() {
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}>
+              <TableRow key={r.id} className={selected.has(r.id) ? "bg-muted/50" : ""}>
+                <TableCell><Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleSelect(r.id)} /></TableCell>
                 <TableCell className="font-medium font-mono text-xs">{r.quote_no}</TableCell>
                 <TableCell>{r.clients?.name || "—"}</TableCell>
                 <TableCell>{r.subtotal?.toLocaleString()}</TableCell>
@@ -133,7 +170,7 @@ export default function Quotations() {
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "New"} Quotation</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div><Label>Client</Label><Select value={form.client_id} onValueChange={v => setForm({...form, client_id: v})}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
-          <div><Label>Subtotal (AED)</Label><Input type="number" value={form.subtotal} onChange={e => setForm({...form, subtotal: e.target.value})} /><p className="text-xs text-muted-foreground mt-1">VAT (5%) added automatically</p></div>
+          <div><Label>Subtotal (AED)</Label><Input type="number" value={form.subtotal} onChange={e => setForm({...form, subtotal: e.target.value})} /><p className="text-xs text-muted-foreground mt-1">VAT (5%) added automatically</p>{formErrors.subtotal && <p className="text-xs text-destructive mt-1">{formErrors.subtotal}</p>}</div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Valid Until</Label><Input type="date" value={form.valid_until} onChange={e => setForm({...form, valid_until: e.target.value})} /></div>
             <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="sent">Sent</SelectItem><SelectItem value="approved">Approved</SelectItem><SelectItem value="rejected">Rejected</SelectItem></SelectContent></Select></div>
@@ -143,6 +180,7 @@ export default function Quotations() {
       </DialogContent></Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} onConfirm={() => deleteId && del.mutate(deleteId)} />
+      <ConfirmDialog open={bulkDeleteOpen} onOpenChange={() => setBulkDeleteOpen(false)} title={`Delete ${selected.size} quotations?`} onConfirm={() => bulkDelete.mutate()} />
     </div>
   );
 }

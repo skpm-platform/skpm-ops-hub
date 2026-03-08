@@ -8,25 +8,43 @@ import { Loader2, Lock, Mail } from "lucide-react";
 import { toast } from "sonner";
 import skpmLogo from "@/assets/skpm-logo.png";
 import { useSystemSetting } from "@/hooks/use-system-settings";
+import { loginSchema } from "@/lib/validations";
 
 export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "forgot">("login");
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const logoSrc = companyLogoUrl || skpmLogo;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+    const result = loginSchema.safeParse({ email, password });
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach(err => {
+        if (err.path[0]) fieldErrors[err.path[0] as string] = err.message;
+      });
+      setErrors(fieldErrors);
+      return;
+    }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({ email: result.data.email, password: result.data.password });
     if (error) toast.error(error.message);
     setLoading(false);
   };
 
   const handleForgotPassword = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+    const emailCheck = loginSchema.shape.email.safeParse(email);
+    if (!emailCheck.success) {
+      setErrors({ email: emailCheck.error.errors[0]?.message || "Invalid email" });
+      return;
+    }
     setLoading(true);
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
@@ -59,6 +77,7 @@ export default function Login() {
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input id="email" type="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} required className="pl-9" />
               </div>
+              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
             </div>
             {mode === "login" && (
               <div className="space-y-2">
@@ -67,6 +86,7 @@ export default function Login() {
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input id="password" type="password" placeholder="••••••••" value={password} onChange={(e) => setPassword(e.target.value)} required className="pl-9" />
                 </div>
+                {errors.password && <p className="text-xs text-destructive">{errors.password}</p>}
               </div>
             )}
             <Button type="submit" className="w-full h-10" disabled={loading}>
@@ -76,9 +96,9 @@ export default function Login() {
           </form>
           <div className="mt-4 text-center text-sm">
             {mode === "login" ? (
-              <button onClick={() => setMode("forgot")} className="text-primary hover:underline">Forgot password?</button>
+              <button onClick={() => { setMode("forgot"); setErrors({}); }} className="text-primary hover:underline">Forgot password?</button>
             ) : (
-              <button onClick={() => setMode("login")} className="text-primary hover:underline">Back to sign in</button>
+              <button onClick={() => { setMode("login"); setErrors({}); }} className="text-primary hover:underline">Back to sign in</button>
             )}
           </div>
           <div className="mt-6 pt-4 border-t border-border">
