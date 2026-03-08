@@ -37,7 +37,10 @@ const navGroups = [
   { label: "People", items: [
     { title: "Employees", url: "/employees", icon: Users },
     { title: "Attendance", url: "/attendance", icon: Clock },
+    { title: "Leave", url: "/leave", icon: UserMinus },
     { title: "Manpower", url: "/manpower", icon: HardHat },
+    { title: "Requisitions", url: "/requisitions", icon: Send },
+    { title: "Deployments", url: "/deployments", icon: CalendarPlus },
     { title: "Payroll", url: "/payroll", icon: Wallet },
   ]},
   { label: "Assets & Inventory", items: [
