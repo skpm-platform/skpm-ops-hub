@@ -6,11 +6,14 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Wallet } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Payroll() {
   const qc = useQueryClient();
@@ -40,6 +43,7 @@ export default function Payroll() {
   });
 
   const filtered = data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -50,10 +54,22 @@ export default function Payroll() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No payroll records</p> : (
-          <Table><TableHeader><TableRow><TableHead>Employee</TableHead><TableHead>Month/Year</TableHead><TableHead>Basic</TableHead><TableHead>Allowances</TableHead><TableHead>Deductions</TableHead><TableHead>Net Pay (AED)</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
+            <SortableHeader label="Month/Year" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
+            <SortableHeader label="Basic" sortKey="basic_salary" direction={getSortDirection("basic_salary")} onToggle={toggleSort} />
+            <SortableHeader label="Allowances" sortKey="housing_allowance" direction={getSortDirection("housing_allowance")} onToggle={toggleSort} />
+            <SortableHeader label="Deductions" sortKey="deductions" direction={getSortDirection("deductions")} onToggle={toggleSort} />
+            <SortableHeader label="Net Pay (AED)" sortKey="net_pay" direction={getSortDirection("net_pay")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
               <TableRow key={r.id}><TableCell className="font-medium">{r.employees?.name || "—"}</TableCell><TableCell>{r.month}/{r.year}</TableCell><TableCell>{r.basic_salary?.toLocaleString()}</TableCell><TableCell>{((r.housing_allowance||0)+(r.transport_allowance||0)+(r.food_allowance||0)).toLocaleString()}</TableCell><TableCell className="text-destructive">{r.deductions?.toLocaleString()}</TableCell><TableCell className="font-bold">{r.net_pay?.toLocaleString()}</TableCell><TableCell><Badge variant={r.status === "paid" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Add Payroll Record</DialogTitle></DialogHeader>
