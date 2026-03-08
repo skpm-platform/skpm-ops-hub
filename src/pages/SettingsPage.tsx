@@ -28,7 +28,7 @@ export default function SettingsPage() {
   const isAdmin = currentRole === "admin";
   const queryClient = useQueryClient();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [darkMode, setDarkMode] = useState(document.documentElement.classList.contains("dark"));
+  const { theme, setTheme } = useTheme();
   const [newPassword, setNewPassword] = useState("");
   const [profileName, setProfileName] = useState("");
   const [companyName, setCompanyName] = useState("SKPM Technical Service");
