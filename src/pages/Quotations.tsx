@@ -91,7 +91,7 @@ export default function Quotations() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Pending</p><p className="text-2xl font-semibold mt-1 text-warning">{(statusCounts.draft || 0) + (statusCounts.sent || 0)}</p></CardContent></Card>
       </div>
 
-      <StatusFilter value={statusFilter} onChange={setStatusFilter} counts={statusCounts} options={["draft", "sent", "approved", "rejected"]} />
+      <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"draft",label:"Draft",count:statusCounts.draft||0},{value:"sent",label:"Sent",count:statusCounts.sent||0},{value:"approved",label:"Approved",count:statusCounts.approved||0},{value:"rejected",label:"Rejected",count:statusCounts.rejected||0}]} selected={statusFilter} onSelect={setStatusFilter} />
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>

@@ -81,7 +81,7 @@ export default function Training() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Completed</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts.completed || 0}</p></CardContent></Card>
       </div>
 
-      <StatusFilter value={statusFilter} onChange={setStatusFilter} counts={statusCounts} options={["scheduled", "in_progress", "completed", "cancelled"]} />
+      <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"scheduled",label:"Scheduled",count:statusCounts.scheduled||0},{value:"in_progress",label:"In Progress",count:statusCounts.in_progress||0},{value:"completed",label:"Completed",count:statusCounts.completed||0},{value:"cancelled",label:"Cancelled",count:statusCounts.cancelled||0}]} selected={statusFilter} onSelect={setStatusFilter} />
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search training..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>

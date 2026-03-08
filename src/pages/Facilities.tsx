@@ -81,7 +81,7 @@ export default function Facilities() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Emirates</p><p className="text-2xl font-semibold mt-1">{new Set(data.map((r: any) => r.emirate).filter(Boolean)).size}</p></CardContent></Card>
       </div>
 
-      <StatusFilter value={statusFilter} onChange={setStatusFilter} counts={statusCounts} options={["active", "inactive"]} />
+      <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"active",label:"Active",count:statusCounts.active||0},{value:"inactive",label:"Inactive",count:statusCounts.inactive||0}]} selected={statusFilter} onSelect={setStatusFilter} />
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>

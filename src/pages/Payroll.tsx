@@ -95,7 +95,7 @@ export default function Payroll() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Paid</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts.paid || 0}</p></CardContent></Card>
       </div>
 
-      <StatusFilter value={statusFilter} onChange={setStatusFilter} counts={statusCounts} options={["draft", "processed", "paid"]} />
+      <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"draft",label:"Draft",count:statusCounts.draft||0},{value:"processed",label:"Processed",count:statusCounts.processed||0},{value:"paid",label:"Paid",count:statusCounts.paid||0}]} selected={statusFilter} onSelect={setStatusFilter} />
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
