@@ -1,48 +1,78 @@
 import { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Clock, LogIn, LogOut } from "lucide-react";
+import { Clock, LogIn, LogOut, Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay } from "date-fns";
 
-interface AttendanceRecord {
-  id: string;
-  date: Date;
-  clockIn: string;
-  clockOut: string | null;
-  status: "present" | "late" | "absent";
-}
-
-const mockRecords: AttendanceRecord[] = [
-  { id: "1", date: new Date(), clockIn: "08:00", clockOut: "17:00", status: "present" },
-  { id: "2", date: new Date(Date.now() - 86400000), clockIn: "08:45", clockOut: "17:00", status: "late" },
-  { id: "3", date: new Date(Date.now() - 86400000 * 2), clockIn: "08:00", clockOut: "17:30", status: "present" },
-];
-
 export default function Attendance() {
-  const [records, setRecords] = useState(mockRecords);
-  const [isClockedIn, setIsClockedIn] = useState(false);
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [currentMonth] = useState(new Date());
 
   const monthStart = startOfMonth(currentMonth);
   const monthEnd = endOfMonth(currentMonth);
   const daysInMonth = eachDayOfInterval({ start: monthStart, end: monthEnd });
 
-  const handleClockIn = () => {
-    setIsClockedIn(true);
-    const now = format(new Date(), "HH:mm");
-    setRecords([{ id: Date.now().toString(), date: new Date(), clockIn: now, clockOut: null, status: now > "08:15" ? "late" : "present" }, ...records]);
-    toast.success(`Clocked in at ${now}`);
-  };
+  const { data: records, isLoading } = useQuery({
+    queryKey: ["attendance", user?.id],
+    queryFn: async () => {
+      if (!user) return [];
+      const { data } = await supabase
+        .from("attendance")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("date", { ascending: false });
+      return data ?? [];
+    },
+    enabled: !!user,
+  });
 
-  const handleClockOut = () => {
-    setIsClockedIn(false);
-    const now = format(new Date(), "HH:mm");
-    setRecords(records.map((r, i) => (i === 0 ? { ...r, clockOut: now } : r)));
-    toast.success(`Clocked out at ${now}`);
-  };
+  const todayRecord = records?.find(r => r.date === format(new Date(), "yyyy-MM-dd"));
+  const isClockedIn = todayRecord && !todayRecord.clock_out;
+
+  const clockIn = useMutation({
+    mutationFn: async () => {
+      if (!user) throw new Error("Not logged in");
+      const now = new Date().toISOString();
+      const isLate = new Date().getHours() >= 9;
+      const { error } = await supabase.from("attendance").insert({
+        user_id: user.id,
+        clock_in: now,
+        date: format(new Date(), "yyyy-MM-dd"),
+        status: isLate ? "late" : "present",
+      });
+      if (error) throw error;
+      await logAudit("Clocked in", `At ${format(new Date(), "HH:mm")}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      toast.success(`Clocked in at ${format(new Date(), "HH:mm")}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
+  const clockOut = useMutation({
+    mutationFn: async () => {
+      if (!todayRecord) throw new Error("No clock in record");
+      const { error } = await supabase.from("attendance").update({
+        clock_out: new Date().toISOString(),
+      }).eq("id", todayRecord.id);
+      if (error) throw error;
+      await logAudit("Clocked out", `At ${format(new Date(), "HH:mm")}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      toast.success(`Clocked out at ${format(new Date(), "HH:mm")}`);
+    },
+    onError: (e: Error) => toast.error(e.message),
+  });
 
   const getStatusColor = (s: string) => {
     if (s === "present") return "bg-success/15 text-success";
@@ -51,9 +81,8 @@ export default function Attendance() {
   };
 
   const getDayStatus = (day: Date) => {
-    const record = records.find((r) => isSameDay(r.date, day));
-    if (!record) return null;
-    return record.status;
+    const record = records?.find((r) => isSameDay(new Date(r.date), day));
+    return record?.status ?? null;
   };
 
   return (
@@ -64,11 +93,11 @@ export default function Attendance() {
           <p className="text-muted-foreground">Track your daily attendance</p>
         </div>
         <div className="flex gap-2">
-          <Button onClick={handleClockIn} disabled={isClockedIn} className="gap-2">
-            <LogIn className="h-4 w-4" /> Clock In
+          <Button onClick={() => clockIn.mutate()} disabled={!!isClockedIn || !!todayRecord || clockIn.isPending} className="gap-2">
+            {clockIn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Clock In
           </Button>
-          <Button onClick={handleClockOut} disabled={!isClockedIn} variant="outline" className="gap-2">
-            <LogOut className="h-4 w-4" /> Clock Out
+          <Button onClick={() => clockOut.mutate()} disabled={!isClockedIn || clockOut.isPending} variant="outline" className="gap-2">
+            {clockOut.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogOut className="h-4 w-4" />} Clock Out
           </Button>
         </div>
       </div>
@@ -80,21 +109,15 @@ export default function Attendance() {
             {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((d) => (
               <div key={d} className="text-xs font-medium text-muted-foreground py-2">{d}</div>
             ))}
-            {Array.from({ length: monthStart.getDay() }).map((_, i) => (
-              <div key={`empty-${i}`} />
-            ))}
+            {Array.from({ length: monthStart.getDay() }).map((_, i) => <div key={`e-${i}`} />)}
             {daysInMonth.map((day) => {
               const status = getDayStatus(day);
               return (
-                <div
-                  key={day.toISOString()}
-                  className={`aspect-square flex items-center justify-center rounded-md text-sm ${
-                    status === "present" ? "bg-success/15 text-success font-medium" :
-                    status === "late" ? "bg-warning/15 text-warning font-medium" :
-                    status === "absent" ? "bg-destructive/15 text-destructive font-medium" :
-                    day > new Date() ? "text-muted-foreground/30" : "text-muted-foreground"
-                  }`}
-                >
+                <div key={day.toISOString()} className={`aspect-square flex items-center justify-center rounded-md text-sm ${
+                  status === "present" ? "bg-success/15 text-success font-medium" :
+                  status === "late" ? "bg-warning/15 text-warning font-medium" :
+                  day > new Date() ? "text-muted-foreground/30" : "text-muted-foreground"
+                }`}>
                   {day.getDate()}
                 </div>
               );
@@ -104,30 +127,38 @@ export default function Attendance() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle className="text-base">Recent Records</CardTitle></CardHeader>
+        <CardHeader><CardTitle className="text-base">Records</CardTitle></CardHeader>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Date</TableHead>
-                <TableHead>Clock In</TableHead>
-                <TableHead>Clock Out</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {records.map((r) => (
-                <TableRow key={r.id}>
-                  <TableCell className="font-medium">{format(r.date, "dd MMM yyyy")}</TableCell>
-                  <TableCell>{r.clockIn}</TableCell>
-                  <TableCell>{r.clockOut ?? "—"}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary" className={`border-0 ${getStatusColor(r.status)}`}>{r.status}</Badge>
-                  </TableCell>
+          {isLoading ? (
+            <div className="flex justify-center p-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Date</TableHead>
+                  <TableHead>Clock In</TableHead>
+                  <TableHead>Clock Out</TableHead>
+                  <TableHead>Status</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {(records ?? []).length === 0 ? (
+                  <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground py-8">No records yet. Clock in to start.</TableCell></TableRow>
+                ) : (
+                  (records ?? []).slice(0, 20).map((r) => (
+                    <TableRow key={r.id}>
+                      <TableCell className="font-medium">{format(new Date(r.date), "dd MMM yyyy")}</TableCell>
+                      <TableCell>{r.clock_in ? format(new Date(r.clock_in), "HH:mm") : "—"}</TableCell>
+                      <TableCell>{r.clock_out ? format(new Date(r.clock_out), "HH:mm") : "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={`border-0 ${getStatusColor(r.status ?? "present")}`}>{r.status ?? "present"}</Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
