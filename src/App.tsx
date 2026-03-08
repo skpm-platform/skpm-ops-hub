@@ -7,6 +7,7 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { ThemeProvider } from "next-themes";
 import { lazy, Suspense } from "react";
+import { RoleGuard } from "@/components/RoleGuard";
 
 const Login = lazy(() => import("./pages/Login"));
 const ResetPassword = lazy(() => import("./pages/ResetPassword"));
@@ -90,24 +91,19 @@ const App = () => (
                 <Route path="tasks" element={<Tasks />} />
                 <Route path="work-orders" element={<WorkOrders />} />
                 <Route path="maintenance" element={<Maintenance />} />
-                <Route path="finance" element={<Finance />} />
                 <Route path="quotations" element={<Quotations />} />
-                <Route path="invoices" element={<Invoices />} />
                 <Route path="expenses" element={<Expenses />} />
                 <Route path="purchase-orders" element={<PurchaseOrders />} />
                 <Route path="clients" element={<Clients />} />
-                <Route path="contracts" element={<Contracts />} />
                 <Route path="employees" element={<Employees />} />
                 <Route path="attendance" element={<Attendance />} />
                 <Route path="manpower" element={<Manpower />} />
                 <Route path="leave" element={<LeaveManagement />} />
                 <Route path="requisitions" element={<Requisitions2 />} />
                 <Route path="deployments" element={<Deployments />} />
-                <Route path="payroll" element={<Payroll />} />
                 <Route path="timesheets" element={<Timesheets />} />
                 <Route path="duty-roster" element={<DutyRoster />} />
                 <Route path="gate-passes" element={<GatePasses />} />
-                <Route path="mp-billing" element={<MPBilling />} />
                 <Route path="assets" element={<Assets />} />
                 <Route path="warehouse" element={<Warehouse />} />
                 <Route path="hse" element={<HSE />} />
@@ -119,11 +115,18 @@ const App = () => (
                 <Route path="calendar" element={<CalendarPage />} />
                 <Route path="announcements" element={<Announcements />} />
                 <Route path="documents" element={<Documents />} />
-                <Route path="reports" element={<Reports />} />
                 <Route path="visitor-log" element={<VisitorLog />} />
                 <Route path="helpdesk" element={<Helpdesk />} />
-                <Route path="members" element={<Members />} />
-                <Route path="audit-logs" element={<AuditLogs />} />
+                {/* Admin/Manager protected routes */}
+                <Route path="finance" element={<RoleGuard allowedRoles={["admin", "manager"]}><Finance /></RoleGuard>} />
+                <Route path="invoices" element={<RoleGuard allowedRoles={["admin", "manager"]}><Invoices /></RoleGuard>} />
+                <Route path="contracts" element={<RoleGuard allowedRoles={["admin", "manager"]}><Contracts /></RoleGuard>} />
+                <Route path="payroll" element={<RoleGuard allowedRoles={["admin", "manager"]}><Payroll /></RoleGuard>} />
+                <Route path="mp-billing" element={<RoleGuard allowedRoles={["admin", "manager"]}><MPBilling /></RoleGuard>} />
+                <Route path="reports" element={<RoleGuard allowedRoles={["admin", "manager"]}><Reports /></RoleGuard>} />
+                {/* Admin only routes */}
+                <Route path="members" element={<RoleGuard allowedRoles={["admin"]}><Members /></RoleGuard>} />
+                <Route path="audit-logs" element={<RoleGuard allowedRoles={["admin"]}><AuditLogs /></RoleGuard>} />
                 <Route path="settings" element={<SettingsPage />} />
               </Route>
               <Route path="*" element={<NotFound />} />
