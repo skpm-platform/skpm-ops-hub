@@ -31,7 +31,7 @@ export default function Members() {
   const [search, setSearch] = useState("");
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingMember, setEditingMember] = useState<Member | null>(null);
-  const [form, setForm] = useState({ name: "", email: "", role: "", status: "active" as const });
+  const [form, setForm] = useState<{ name: string; email: string; role: string; status: "active" | "inactive" }>({ name: "", email: "", role: "", status: "active" });
 
   const filtered = members.filter(
     (m) => m.name.toLowerCase().includes(search.toLowerCase()) || m.email.toLowerCase().includes(search.toLowerCase())
