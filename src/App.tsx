@@ -85,6 +85,7 @@ const App = () => (
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
+                <Route path="my-profile" element={<MyProfile />} />
                 <Route path="projects" element={<Projects />} />
                 <Route path="tasks" element={<Tasks />} />
                 <Route path="work-orders" element={<WorkOrders />} />
