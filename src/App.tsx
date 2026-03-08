@@ -45,6 +45,10 @@ const AuditLogs = lazy(() => import("./pages/AuditLogs"));
 const LeaveManagement = lazy(() => import("./pages/LeaveManagement"));
 const Requisitions2 = lazy(() => import("./pages/Requisitions"));
 const Deployments = lazy(() => import("./pages/Deployments"));
+const GatePasses = lazy(() => import("./pages/GatePasses"));
+const Timesheets = lazy(() => import("./pages/Timesheets"));
+const DutyRoster = lazy(() => import("./pages/DutyRoster"));
+const MPBilling = lazy(() => import("./pages/MPBilling"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
