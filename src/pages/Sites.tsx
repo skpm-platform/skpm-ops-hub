@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,15 +38,27 @@ export default function Sites() {
   const save = useMutation({
     mutationFn: async () => {
       const payload = { name: form.name, location: form.location, emirate: form.emirate, type: form.type, gps_coordinates: form.gps_coordinates || null, status: form.status };
-      if (editingId) { const { error } = await (supabase as any).from("sites").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("sites").insert(payload); if (error) throw error; }
+      if (editingId) {
+        const { error } = await (supabase as any).from("sites").update(payload).eq("id", editingId);
+        if (error) throw error;
+        await logAudit("Updated site", form.name, "sites");
+      } else {
+        const { error } = await (supabase as any).from("sites").insert(payload);
+        if (error) throw error;
+        await logAudit("Created site", `${form.name} — ${form.emirate}`, "sites");
+      }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sites"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("sites").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const site = data.find((r: any) => r.id === id);
+      const { error } = await (supabase as any).from("sites").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted site", site?.name, "sites");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["sites"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 

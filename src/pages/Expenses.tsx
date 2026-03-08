@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useUserRole } from "@/hooks/use-profile";
 import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, CreditCard, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, Search, CreditCard, Pencil, Trash2, Eye, CheckCircle, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -27,11 +28,13 @@ const categoryOptions = [
   { value: "utilities", label: "Utilities" }, { value: "rent", label: "Rent" },
   { value: "maintenance", label: "Maintenance" }, { value: "other", label: "Other" },
 ];
-const stC: Record<string,string> = { pending: "bg-amber-100 text-amber-700", approved: "bg-emerald-100 text-emerald-700", rejected: "bg-red-100 text-red-700" };
+const stC: Record<string,string> = { pending: "bg-warning/15 text-warning", approved: "bg-success/15 text-success", rejected: "bg-destructive/15 text-destructive" };
 const emptyForm = { description: "", category: "materials", amount: "", date: "" };
 
 export default function Expenses() {
   const { user } = useAuth();
+  const { data: role } = useUserRole();
+  const isManagerUp = role === "admin" || role === "manager";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -40,6 +43,7 @@ export default function Expenses() {
   const [viewing, setViewing] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const [form, setForm] = useState(emptyForm);
 
   const { data = [], isLoading } = useQuery({
@@ -53,11 +57,11 @@ export default function Expenses() {
       if (editingId) {
         const { error } = await supabase.from("expenses").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated expense", `AED ${payload.amount}`);
+        await logAudit("Updated expense", `${payload.category} — AED ${payload.amount}`, "expenses");
       } else {
         const { error } = await supabase.from("expenses").insert({ ...payload, submitted_by: user?.id });
         if (error) throw error;
-        await logAudit("Submitted expense", `${payload.category} - AED ${payload.amount}`);
+        await logAudit("Submitted expense", `${payload.category} — AED ${payload.amount}`, "expenses");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["expenses"] }); toast.success(editingId ? "Updated" : "Expense submitted"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -66,9 +70,10 @@ export default function Expenses() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
+      const exp = data.find((r: any) => r.id === id);
       const { error } = await supabase.from("expenses").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted expense", id);
+      await logAudit("Deleted expense", `${exp?.category} — AED ${exp?.amount}`, "expenses");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["expenses"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
@@ -78,9 +83,11 @@ export default function Expenses() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("expenses").update({ status, approved_by: user?.id }).eq("id", id);
       if (error) throw error;
-      await logAudit(`${status} expense`, id);
+      const exp = data.find((r: any) => r.id === id);
+      await logAudit(`Expense ${status}`, `${exp?.category} — AED ${exp?.amount}`, "expenses");
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["expenses"] }); toast.success("Status updated"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["expenses"] }); toast.success("Status updated"); setConfirmAction(null); },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const handleEdit = (r: any) => {
@@ -119,7 +126,7 @@ export default function Expenses() {
       <div className="grid gap-3 sm:grid-cols-4">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Submitted</p><p className="text-2xl font-bold">AED {totalAmount.toLocaleString()}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Approved</p><p className="text-2xl font-bold text-success">AED {approvedAmount.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Pending</p><p className="text-2xl font-bold text-amber-600">{data.filter((r:any)=>r.status==="pending").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Pending</p><p className="text-2xl font-bold text-warning">{data.filter((r:any)=>r.status==="pending").length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Rejected</p><p className="text-2xl font-bold text-destructive">{data.filter((r:any)=>r.status==="rejected").length}</p></CardContent></Card>
       </div>
 
@@ -145,16 +152,17 @@ export default function Expenses() {
                 <TableCell><Badge variant="outline">{r.category}</Badge></TableCell>
                 <TableCell className="max-w-xs truncate">{r.description || "—"}</TableCell>
                 <TableCell className="font-medium">{r.amount?.toLocaleString()}</TableCell>
-                <TableCell><Badge className={stC[r.status] || ""}>{r.status}</Badge></TableCell>
+                <TableCell><Badge className={`border-0 ${stC[r.status] || ""}`}>{r.status}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
-                    {r.status === "pending" && <>
-                      <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => updateStatus.mutate({id:r.id,status:"approved"})}>Approve</Button>
-                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive" onClick={() => updateStatus.mutate({id:r.id,status:"rejected"})}>Reject</Button>
+                    {r.status === "pending" && isManagerUp && <>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: r.id, status: "approved" })}><CheckCircle className="h-3 w-3" />Approve</Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive gap-1" onClick={() => setConfirmAction({ id: r.id, status: "rejected" })}><XCircle className="h-3 w-3" />Reject</Button>
                     </>}
+                    {r.status === "pending" && !isManagerUp && <span className="text-xs text-muted-foreground">Awaiting</span>}
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    {isManagerUp && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>}
+                    {isManagerUp && <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>}
                   </div>
                 </TableCell>
               </TableRow>))}</TableBody></Table>
@@ -188,6 +196,13 @@ export default function Expenses() {
         )}
       </DialogContent></Dialog>
 
+      <ConfirmDialog
+        open={!!confirmAction}
+        onOpenChange={() => setConfirmAction(null)}
+        title={confirmAction?.status === "approved" ? "Approve Expense?" : "Reject Expense?"}
+        description={confirmAction?.status === "approved" ? "This expense will be marked as approved." : "This expense will be marked as rejected."}
+        onConfirm={() => confirmAction && updateStatus.mutate(confirmAction)}
+      />
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Expense?" onConfirm={() => deleteId && remove.mutate(deleteId)} />
     </div>
   );

@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,9 +54,11 @@ export default function Assets() {
       if (editingId) {
         const { error } = await supabase.from("assets").update(payload).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated asset", form.name, "assets");
       } else {
         const { error } = await supabase.from("assets").insert({ ...payload, asset_tag: `AST-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
+        await logAudit("Created asset", `${form.name} — AED ${payload.purchase_price}`, "assets");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["assets"] }); toast.success(editingId ? "Updated" : "Asset added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -63,7 +66,12 @@ export default function Assets() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("assets").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const asset = data.find((r: any) => r.id === id);
+      const { error } = await supabase.from("assets").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted asset", asset?.name, "assets");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["assets"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -103,7 +111,7 @@ export default function Assets() {
       <div className="grid gap-3 sm:grid-cols-3">
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Assets</p><p className="text-2xl font-bold">{data.length}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Value</p><p className="text-2xl font-bold">AED {totalValue.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">In Maintenance</p><p className="text-2xl font-bold text-amber-600">{data.filter((r:any)=>r.status==="maintenance").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">In Maintenance</p><p className="text-2xl font-bold text-warning">{data.filter((r:any)=>r.status==="maintenance").length}</p></CardContent></Card>
       </div>
 
       <Card><CardContent className="pt-6">
