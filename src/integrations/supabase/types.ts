@@ -1910,6 +1910,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      cleanup_old_notifications: { Args: never; Returns: undefined }
       delete_user_notifications: {
         Args: { _user_id: string }
         Returns: undefined
