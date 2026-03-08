@@ -11,6 +11,7 @@ import { Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown, ArrowU
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Area, AreaChart, PieChart, Pie, Cell, Legend } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
+import { AIInsightsWidget } from "@/components/AIInsightsWidget";
 
 export default function Dashboard() {
   const { user } = useAuth();
@@ -379,7 +380,17 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Bottom Row */}
+      {/* AI Insights + Bottom Row */}
+      <div className="grid gap-4 lg:grid-cols-3">
+        <AIInsightsWidget kpiData={{
+          employees: employeeCount, presentToday, attendanceRate,
+          totalIncome, totalExpense, netProfit: totalIncome - totalExpense,
+          openTasks, highPriorityTasks: highPriority,
+          activeProjects: activeProjects.length, totalProjects: projects?.length ?? 0,
+          unpaidInvoices, unpaidTotal, openWorkOrders: openWO,
+          openHSEIncidents: openHSE, pendingLeaves, pendingExpenses,
+        }} />
+      </div>
       <div className="grid gap-4 lg:grid-cols-2">
         {/* Active Projects */}
         <Card className="border shadow-sm">

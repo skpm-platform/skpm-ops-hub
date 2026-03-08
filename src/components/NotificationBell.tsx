@@ -54,7 +54,7 @@ export function NotificationBell() {
     onSuccess: () => qc.invalidateQueries({ queryKey: ["notifications"] }),
   });
 
-  const clearRead = useMutation({
+  const clearAll = useMutation({
     mutationFn: async () => {
       if (!user) return;
       await supabase.rpc("delete_user_notifications", { _user_id: user.id });
@@ -101,9 +101,9 @@ export function NotificationBell() {
               <Check className="h-3 w-3" /> Mark all read
             </Button>
           )}
-          {notifications.some((n: any) => n.read) && (
-            <Button variant="ghost" size="sm" className="text-xs h-auto py-1 text-muted-foreground" onClick={() => clearRead.mutate()}>
-              Clear read
+          {notifications.length > 0 && (
+            <Button variant="ghost" size="sm" className="text-xs h-auto py-1 text-muted-foreground" onClick={() => clearAll.mutate()}>
+              Clear all
             </Button>
           )}
         </div>

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,10 +64,12 @@ export default function WorkOrders() {
       if (editingId) {
         const { error } = await supabase.from("work_orders").update(result.data).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated work order", result.data.title, "work_orders");
       } else {
         const insertData = { title: result.data.title, type: result.data.type, priority: result.data.priority, description: result.data.description, due_date: result.data.due_date || null, status: result.data.status, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id };
         const { error } = await supabase.from("work_orders").insert(insertData);
         if (error) throw error;
+        await logAudit("Created work order", result.data.title, "work_orders");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success(editingId ? "Updated" : "Work order created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -74,7 +77,12 @@ export default function WorkOrders() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("work_orders").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const wo = data.find((w: any) => w.id === id);
+      const { error } = await supabase.from("work_orders").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted work order", wo?.title, "work_orders");
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });

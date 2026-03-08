@@ -20,6 +20,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { logAudit } from "@/lib/audit";
+import { PasswordStrengthMeter, isPasswordStrong } from "@/components/PasswordStrengthMeter";
 
 function CompanySettingsTab() {
   const updateSetting = useUpdateSystemSetting();
@@ -184,13 +185,10 @@ export default function SettingsPage() {
   });
 
   const updatePassword = async () => {
-    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
-    if (!/[A-Z]/.test(newPassword)) { toast.error("Password must contain an uppercase letter"); return; }
-    if (!/[0-9]/.test(newPassword)) { toast.error("Password must contain a number"); return; }
-    if (!/[^A-Za-z0-9]/.test(newPassword)) { toast.error("Password must contain a special character"); return; }
+    if (!isPasswordStrong(newPassword)) { toast.error("Password does not meet strength requirements"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
-    else { toast.success("Password updated"); setNewPassword(""); }
+    else { toast.success("Password updated"); setNewPassword(""); await logAudit("Changed password", undefined, "settings"); }
   };
 
   // Admin: members & roles
@@ -309,8 +307,12 @@ export default function SettingsPage() {
           <Card>
             <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="h-4 w-4" /> Change Password</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div className="space-y-2 max-w-sm"><Label>New Password</Label><Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 6 characters" /></div>
-              <Button onClick={updatePassword} size="sm" className="h-9">Update Password</Button>
+              <div className="space-y-2 max-w-sm">
+                <Label>New Password</Label>
+                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} placeholder="Min 8 characters, upper, number, special" />
+                <PasswordStrengthMeter password={newPassword} />
+              </div>
+              <Button onClick={updatePassword} size="sm" className="h-9" disabled={!isPasswordStrong(newPassword)}>Update Password</Button>
             </CardContent>
           </Card>
         </TabsContent>

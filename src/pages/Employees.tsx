@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Users, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
@@ -18,6 +18,9 @@ import { ComboboxSelect } from "@/components/ComboboxSelect";
 import { StatusFilter } from "@/components/StatusFilter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ExportButton } from "@/components/ExportButton";
+import { CSVImportButton } from "@/components/CSVImportButton";
+import { BulkActions, useBulkSelect } from "@/components/BulkActions";
+import { Checkbox } from "@/components/ui/checkbox";
 
 const positionOptions = [
   { value: "Electrician", label: "Electrician" }, { value: "Plumber", label: "Plumber" },
@@ -103,12 +106,46 @@ export default function Employees() {
   ];
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
+  const bulk = useBulkSelect(pageData);
+
+  const bulkDelete = useMutation({
+    mutationFn: async () => {
+      for (const id of bulk.selectedIds) {
+        const { error } = await supabase.from("employees").delete().eq("id", id);
+        if (error) throw error;
+      }
+      await logAudit("Bulk deleted employees", `${bulk.selectedIds.length} records`, "employees");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success(`${bulk.selectedIds.length} employees deleted`); bulk.clearSelection(); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleCSVImport = async (rows: Record<string, string>[]) => {
+    const records = rows.map(r => ({
+      name: r.name || r.Name || "",
+      email: r.email || r.Email || null,
+      phone: r.phone || r.Phone || null,
+      nationality: r.nationality || r.Nationality || null,
+      position: r.position || r.Position || null,
+      salary: parseFloat(r.salary || r.Salary || "0") || 0,
+      join_date: r.join_date || r.JoinDate || null,
+      visa_expiry: r.visa_expiry || r.VisaExpiry || null,
+      passport_no: r.passport_no || r.PassportNo || null,
+      visa_no: r.visa_no || r.VisaNo || null,
+      employee_id: `EMP-${Date.now().toString().slice(-6)}-${Math.random().toString(36).slice(2, 5)}`,
+    })).filter(r => r.name);
+    const { error } = await supabase.from("employees").insert(records);
+    if (error) throw error;
+    await logAudit("Imported employees via CSV", `${records.length} records`, "employees");
+    qc.invalidateQueries({ queryKey: ["employees"] });
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Users className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Employees</h1><p className="text-sm text-muted-foreground">{data.length} total employees</p></div></div>
         <div className="flex gap-2">
+          <CSVImportButton onImport={handleCSVImport} expectedColumns={["name", "email", "phone", "position", "nationality", "salary"]} label="Import" />
           <ExportButton data={filtered} filename="employees" columns={[{key:"employee_id",label:"ID"},{key:"name",label:"Name"},{key:"position",label:"Position"},{key:"nationality",label:"Nationality"},{key:"salary",label:"Salary"},{key:"status",label:"Status"}]} />
           <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>
         </div>
@@ -128,8 +165,10 @@ export default function Employees() {
         </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No employees found</p> : (
           <>
+          <BulkActions selectedIds={bulk.selectedIds} totalItems={pageData.length} onSelectAll={bulk.selectAll} onClearSelection={bulk.clearSelection} onBulkDelete={() => bulkDelete.mutate()} allSelected={bulk.allSelected} />
           <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
+            <TableHead className="w-10"><Checkbox checked={bulk.allSelected} onCheckedChange={(c) => bulk.selectAll(!!c)} /></TableHead>
             <SortableHeader label="ID" sortKey="employee_id" direction={getSortDirection("employee_id")} onToggle={toggleSort} />
             <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
             <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
@@ -142,7 +181,8 @@ export default function Employees() {
             <TableBody>{pageData.map((r: any) => {
               const visaExpiring = r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now() + 30*86400000);
               return (
-              <TableRow key={r.id}>
+              <TableRow key={r.id} className={bulk.isSelected(r.id) ? "bg-primary/5" : ""}>
+                <TableCell><Checkbox checked={bulk.isSelected(r.id)} onCheckedChange={() => bulk.toggle(r.id)} /></TableCell>
                 <TableCell className="text-xs font-mono">{r.employee_id}</TableCell>
                 <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell>{r.position || "—"}</TableCell>
