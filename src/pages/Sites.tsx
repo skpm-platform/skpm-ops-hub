@@ -6,15 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, MapPin } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Sites() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ name: "", location: "", emirate: "Dubai", type: "industrial" });
 
@@ -29,7 +33,11 @@ export default function Sites() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()));
+  const filtered = data
+    .filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
+
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -37,14 +45,46 @@ export default function Sites() {
         <div className="flex items-center gap-3"><MapPin className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Sites & Locations</h1></div>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Site</Button>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        {[
+          { label: "Total Sites", value: data.length },
+          { label: "Active", value: data.filter((r: any) => r.status === "active").length },
+          { label: "Emirates", value: new Set(data.map((r: any) => r.emirate).filter(Boolean)).size },
+          { label: "Types", value: new Set(data.map((r: any) => r.type).filter(Boolean)).size },
+        ].map(s => (
+          <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p><p className="text-2xl font-semibold mt-1">{s.value}</p></CardContent></Card>
+        ))}
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select>
+        </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No sites</p> : (
-          <Table><TableHeader><TableRow><TableHead>Site Name</TableHead><TableHead>Client</TableHead><TableHead>Emirate</TableHead><TableHead>Type</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell>{r.clients?.name || "—"}</TableCell><TableCell>{r.emirate}</TableCell><TableCell><Badge variant="outline">{r.type}</Badge></TableCell><TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Site Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+            <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
+            <SortableHeader label="Emirate" sortKey="emirate" direction={getSortDirection("emirate")} onToggle={toggleSort} />
+            <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-medium">{r.name}<br/><span className="text-xs text-muted-foreground">{r.location}</span></TableCell>
+                <TableCell>{r.clients?.name || "—"}</TableCell>
+                <TableCell>{r.emirate}</TableCell>
+                <TableCell><Badge variant="outline">{r.type}</Badge></TableCell>
+                <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+              </TableRow>
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
+
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>Add Site</DialogTitle></DialogHeader>
         <div className="space-y-4">

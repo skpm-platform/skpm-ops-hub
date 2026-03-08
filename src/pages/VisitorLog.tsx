@@ -5,11 +5,15 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Contact, LogOut } from "lucide-react";
+import { Plus, Search, Contact, LogOut, UserCheck, UserX } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function VisitorLog() {
   const qc = useQueryClient();
@@ -33,7 +37,11 @@ export default function VisitorLog() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["visitors"] }); toast.success("Checked out"); },
   });
 
-  const filtered = data.filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()));
+  const currentlyIn = data.filter((r: any) => !r.check_out).length;
+  const todayVisitors = data.filter((r: any) => r.check_in && format(new Date(r.check_in), "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd")).length;
+
+  const filtered = data.filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()) || r.company?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -41,14 +49,49 @@ export default function VisitorLog() {
         <div className="flex items-center gap-3"><Contact className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Visitor Log</h1></div>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Check In Visitor</Button>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Records</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Today's Visitors</p><p className="text-2xl font-semibold mt-1">{todayVisitors}</p></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-start justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Currently On-Site</p><p className="text-2xl font-semibold mt-1 text-success">{currentlyIn}</p></div><UserCheck className="h-5 w-5 text-success" /></CardContent></Card>
+        <Card><CardContent className="p-4 flex items-start justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Checked Out</p><p className="text-2xl font-semibold mt-1">{data.filter((r: any) => r.check_out).length}</p></div><UserX className="h-5 w-5 text-muted-foreground" /></CardContent></Card>
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by name or company..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No visitors</p> : (
-          <Table><TableHeader><TableRow><TableHead>Name</TableHead><TableHead>Company</TableHead><TableHead>Purpose</TableHead><TableHead>Check In</TableHead><TableHead>Check Out</TableHead><TableHead>Action</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="font-medium">{r.name}</TableCell><TableCell>{r.company}</TableCell><TableCell>{r.purpose}</TableCell><TableCell className="text-xs">{r.check_in && format(new Date(r.check_in), "dd/MM HH:mm")}</TableCell><TableCell className="text-xs">{r.check_out ? format(new Date(r.check_out), "dd/MM HH:mm") : "—"}</TableCell><TableCell>{!r.check_out && <Button size="sm" variant="outline" onClick={() => checkout.mutate(r.id)}><LogOut className="h-3 w-3 mr-1" />Out</Button>}</TableCell></TableRow>
-            ))}</TableBody></Table>)}
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+            <SortableHeader label="Company" sortKey="company" direction={getSortDirection("company")} onToggle={toggleSort} />
+            <SortableHeader label="Purpose" sortKey="purpose" direction={getSortDirection("purpose")} onToggle={toggleSort} />
+            <SortableHeader label="Check In" sortKey="check_in" direction={getSortDirection("check_in")} onToggle={toggleSort} />
+            <SortableHeader label="Check Out" sortKey="check_out" direction={getSortDirection("check_out")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="check_out" direction={getSortDirection("check_out")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell className="font-medium">{r.name}</TableCell>
+                <TableCell>{r.company || "—"}</TableCell>
+                <TableCell>{r.purpose || "—"}</TableCell>
+                <TableCell className="text-xs">{r.check_in && format(new Date(r.check_in), "dd/MM HH:mm")}</TableCell>
+                <TableCell className="text-xs">{r.check_out ? format(new Date(r.check_out), "dd/MM HH:mm") : "—"}</TableCell>
+                <TableCell>
+                  {!r.check_out ? (
+                    <Button size="sm" variant="outline" onClick={() => checkout.mutate(r.id)} className="h-7 text-xs gap-1">
+                      <LogOut className="h-3 w-3" />Check Out
+                    </Button>
+                  ) : (
+                    <Badge className="bg-muted text-muted-foreground border-0">Left</Badge>
+                  )}
+                </TableCell>
+              </TableRow>
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
+
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>Check In Visitor</DialogTitle></DialogHeader>
         <div className="space-y-4">

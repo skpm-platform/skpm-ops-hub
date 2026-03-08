@@ -6,15 +6,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Truck } from "lucide-react";
+import { Plus, Search, Truck, Download } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Transport() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ make_model: "", plate_number: "", type: "car", capacity: "" });
 
@@ -29,7 +33,11 @@ export default function Transport() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
+  const filtered = data
+    .filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
+
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -37,14 +45,48 @@ export default function Transport() {
         <div className="flex items-center gap-3"><Truck className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Transport</h1></div>
         <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />Add Vehicle</Button>
       </div>
+
+      <div className="grid gap-4 sm:grid-cols-4">
+        {[
+          { label: "Total Vehicles", value: data.length },
+          { label: "Active", value: data.filter((r: any) => r.status === "active").length },
+          { label: "Maintenance", value: data.filter((r: any) => r.status === "maintenance").length },
+          { label: "Total Capacity", value: data.reduce((s: number, r: any) => s + (r.capacity || 0), 0) },
+        ].map(s => (
+          <Card key={s.label}><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">{s.label}</p><p className="text-2xl font-semibold mt-1">{s.value}</p></CardContent></Card>
+        ))}
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="mb-4 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}><SelectTrigger className="w-40"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="all">All Status</SelectItem><SelectItem value="active">Active</SelectItem><SelectItem value="maintenance">Maintenance</SelectItem><SelectItem value="inactive">Inactive</SelectItem></SelectContent></Select>
+        </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No vehicles</p> : (
-          <Table><TableHeader><TableRow><TableHead>Vehicle #</TableHead><TableHead>Make/Model</TableHead><TableHead>Plate</TableHead><TableHead>Type</TableHead><TableHead>Capacity</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="text-xs">{r.vehicle_no}</TableCell><TableCell className="font-medium">{r.make_model}</TableCell><TableCell>{r.plate_number}</TableCell><TableCell><Badge variant="outline">{r.type}</Badge></TableCell><TableCell>{r.capacity}</TableCell><TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Vehicle #" sortKey="vehicle_no" direction={getSortDirection("vehicle_no")} onToggle={toggleSort} />
+            <SortableHeader label="Make/Model" sortKey="make_model" direction={getSortDirection("make_model")} onToggle={toggleSort} />
+            <SortableHeader label="Plate" sortKey="plate_number" direction={getSortDirection("plate_number")} onToggle={toggleSort} />
+            <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+            <SortableHeader label="Capacity" sortKey="capacity" direction={getSortDirection("capacity")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
+              <TableRow key={r.id}>
+                <TableCell className="text-xs font-mono">{r.vehicle_no}</TableCell>
+                <TableCell className="font-medium">{r.make_model}</TableCell>
+                <TableCell>{r.plate_number}</TableCell>
+                <TableCell><Badge variant="outline">{r.type}</Badge></TableCell>
+                <TableCell>{r.capacity}</TableCell>
+                <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+              </TableRow>
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
+
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>Add Vehicle</DialogTitle></DialogHeader>
         <div className="space-y-4">
