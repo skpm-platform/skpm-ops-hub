@@ -121,13 +121,28 @@ export default function Projects() {
             <SortableHeader label="Budget" sortKey="budget" direction={getSortDirection("budget")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
-            <TableBody>{pageData.map((p: any) => (
+            <TableBody>{pageData.map((p: any) => {
+              const budgetPct = p.budget > 0 ? Math.min(100, Math.round(((p.spent || 0) / p.budget) * 100)) : 0;
+              const budgetWarning = budgetPct >= 80;
+              return (
               <TableRow key={p.id}>
                 <TableCell><span className="font-medium">{p.name}</span><br/><span className="text-xs text-muted-foreground">{p.project_no}</span></TableCell>
                 <TableCell>{p.clients?.name || "—"}</TableCell>
                 <TableCell><Badge className={statusColors[p.status] || ""}>{p.status}</Badge></TableCell>
                 <TableCell><Badge variant={p.priority === "high" ? "destructive" : "secondary"}>{p.priority}</Badge></TableCell>
-                <TableCell>AED {p.budget?.toLocaleString()}</TableCell>
+                <TableCell>
+                  <div className="space-y-1">
+                    <span className="text-xs">AED {p.budget?.toLocaleString()}</span>
+                    {p.budget > 0 && (
+                      <div className="flex items-center gap-2">
+                        <div className="h-1.5 flex-1 bg-secondary rounded-full overflow-hidden">
+                          <div className={`h-full rounded-full transition-all ${budgetWarning ? "bg-destructive" : "bg-success"}`} style={{ width: `${budgetPct}%` }} />
+                        </div>
+                        <span className={`text-[10px] font-medium ${budgetWarning ? "text-destructive" : "text-muted-foreground"}`}>{budgetPct}%</span>
+                      </div>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-1">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(p); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -135,7 +150,8 @@ export default function Projects() {
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(p.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
                 </TableCell>
-              </TableRow>))}</TableBody></Table>
+              </TableRow>
+            );})}</TableBody></Table>
           </div>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>

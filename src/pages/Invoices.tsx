@@ -167,12 +167,16 @@ export default function Invoices() {
       </DialogContent></Dialog>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
-        <DialogHeader><DialogTitle>Invoice Details</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle className="flex items-center justify-between">Invoice Details <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => window.print()}><Printer className="h-3 w-3" />Print</Button></DialogTitle></DialogHeader>
         {viewing && (
-          <div className="space-y-3 text-sm">
+          <div className="space-y-3 text-sm print:text-black" id="invoice-print">
+            <div className="hidden print:block text-center mb-4">
+              <h1 className="text-2xl font-bold">SKPM Technical Service</h1>
+              <p className="text-sm">TAX INVOICE</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               {[["Invoice#",viewing.invoice_no],["Client",viewing.clients?.name],["Issue Date",viewing.issue_date],["Due Date",viewing.due_date],["Subtotal",`AED ${viewing.subtotal?.toLocaleString()}`],["VAT (5%)",`AED ${viewing.vat?.toLocaleString()}`],["Total",`AED ${viewing.total?.toLocaleString()}`],["Status",viewing.status],["Payment Method",viewing.payment_method],["Paid Date",viewing.paid_date]].map(([l,v])=>(
-                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
+                <div key={l as string}><p className="text-muted-foreground print:text-gray-500 text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
               ))}
             </div>
           </div>
