@@ -117,3 +117,33 @@
     @apply bg-card/80 backdrop-blur-sm border border-border/50 shadow-sm;
   }
 }
+
+/* Print-friendly styles */
+@media print {
+  body {
+    background: white !important;
+    color: black !important;
+  }
+  nav, header, aside, footer,
+  [data-sidebar], .sidebar,
+  button:not(.print-visible),
+  .no-print {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+  .print\:block {
+    display: block !important;
+  }
+  .print\:text-black {
+    color: black !important;
+  }
+  .print\:text-gray-500 {
+    color: #6b7280 !important;
+  }
+  @page {
+    margin: 1.5cm;
+  }
+}
