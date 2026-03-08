@@ -185,13 +185,10 @@ export default function SettingsPage() {
   });
 
   const updatePassword = async () => {
-    if (newPassword.length < 8) { toast.error("Password must be at least 8 characters"); return; }
-    if (!/[A-Z]/.test(newPassword)) { toast.error("Password must contain an uppercase letter"); return; }
-    if (!/[0-9]/.test(newPassword)) { toast.error("Password must contain a number"); return; }
-    if (!/[^A-Za-z0-9]/.test(newPassword)) { toast.error("Password must contain a special character"); return; }
+    if (!isPasswordStrong(newPassword)) { toast.error("Password does not meet strength requirements"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
-    else { toast.success("Password updated"); setNewPassword(""); }
+    else { toast.success("Password updated"); setNewPassword(""); await logAudit("Changed password", undefined, "settings"); }
   };
 
   // Admin: members & roles
