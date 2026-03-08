@@ -101,6 +101,11 @@ export function NotificationBell() {
               <Check className="h-3 w-3" /> Mark all read
             </Button>
           )}
+          {notifications.some((n: any) => n.read) && (
+            <Button variant="ghost" size="sm" className="text-xs h-auto py-1 text-muted-foreground" onClick={() => clearRead.mutate()}>
+              Clear read
+            </Button>
+          )}
         </div>
         <ScrollArea className="max-h-80">
           {notifications.length === 0 ? (

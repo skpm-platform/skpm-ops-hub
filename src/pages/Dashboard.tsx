@@ -143,7 +143,7 @@ export default function Dashboard() {
   const openTasks = tasks?.filter(t => t.status !== "done").length ?? 0;
   const highPriority = tasks?.filter(t => t.priority === "high" && t.status !== "done").length ?? 0;
   const activeProjects = projects?.filter(p => p.status === "active") ?? [];
-  const openWO = workOrders?.filter(w => w.status === "open").length ?? 0;
+  const openWO = workOrders?.length ?? 0;
   const unpaidInvoices = invoices?.filter(i => i.status !== "paid").length ?? 0;
   const unpaidTotal = invoices?.filter(i => i.status !== "paid").reduce((s, i) => s + Number(i.total || 0), 0) ?? 0;
   const openHSE = hseIncidents?.length ?? 0;
