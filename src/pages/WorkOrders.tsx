@@ -11,72 +11,167 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Wrench } from "lucide-react";
+import { Plus, Search, Wrench, Pencil, Trash2, Eye } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
+import { ComboboxSelect } from "@/components/ComboboxSelect";
+import { StatusFilter } from "@/components/StatusFilter";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ExportButton } from "@/components/ExportButton";
+
+const stColor: Record<string,string> = { open: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", completed: "bg-emerald-100 text-emerald-700", closed: "bg-gray-100 text-gray-700" };
+const typeOptions = [
+  { value: "corrective", label: "Corrective" }, { value: "preventive", label: "Preventive" },
+  { value: "emergency", label: "Emergency" }, { value: "inspection", label: "Inspection" },
+];
+const emptyForm = { title: "", type: "corrective", priority: "medium", description: "", due_date: "", status: "open" };
 
 export default function WorkOrders() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ title: "", type: "corrective", priority: "medium", description: "", due_date: "" });
+  const [viewOpen, setViewOpen] = useState(false);
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<any>(null);
+  const [form, setForm] = useState(emptyForm);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["work_orders"],
-    queryFn: async () => { const { data } = await (supabase as any).from("work_orders").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("work_orders").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
   const save = useMutation({
-    mutationFn: async () => { const { error } = await (supabase as any).from("work_orders").insert({ ...form, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id }); if (error) throw error; },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success("Work order created"); setOpen(false); setForm({ title: "", type: "corrective", priority: "medium", description: "", due_date: "" }); },
+    mutationFn: async () => {
+      if (editingId) {
+        const { error } = await supabase.from("work_orders").update(form).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("work_orders").insert({ ...form, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id });
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success(editingId ? "Updated" : "Work order created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => r.title?.toLowerCase().includes(search.toLowerCase()));
-  const stColor: Record<string,string> = { open: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", completed: "bg-emerald-100 text-emerald-700", closed: "bg-gray-100 text-gray-700" };
+  const remove = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("work_orders").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success("Deleted"); setDeleteId(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({ title: r.title||"", type: r.type||"corrective", priority: r.priority||"medium", description: r.description||"", due_date: r.due_date||"", status: r.status||"open" });
+    setOpen(true);
+  };
+
+  const filtered = data.filter((r: any) => {
+    const matchSearch = r.title?.toLowerCase().includes(search.toLowerCase()) || r.wo_no?.toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "all" || r.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const statuses = [
+    { value: "all", label: "All", count: data.length },
+    { value: "open", label: "Open", count: data.filter((r: any) => r.status === "open").length },
+    { value: "in_progress", label: "In Progress", count: data.filter((r: any) => r.status === "in_progress").length },
+    { value: "completed", label: "Completed", count: data.filter((r: any) => r.status === "completed").length },
+  ];
+
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3"><Wrench className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Work Orders</h1></div>
-        <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />New Work Order</Button>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3"><Wrench className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Work Orders</h1><p className="text-sm text-muted-foreground">{data.length} total</p></div></div>
+        <div className="flex gap-2">
+          <ExportButton data={filtered} filename="work-orders" columns={[{key:"wo_no",label:"WO#"},{key:"title",label:"Title"},{key:"type",label:"Type"},{key:"priority",label:"Priority"},{key:"status",label:"Status"},{key:"due_date",label:"Due"}]} />
+          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Work Order</Button>
+        </div>
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total</p><p className="text-2xl font-bold">{data.length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Open</p><p className="text-2xl font-bold text-blue-600">{data.filter((r:any)=>r.status==="open").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">In Progress</p><p className="text-2xl font-bold text-amber-600">{data.filter((r:any)=>r.status==="in_progress").length}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Completed</p><p className="text-2xl font-bold text-success">{data.filter((r:any)=>r.status==="completed").length}</p></CardContent></Card>
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
+        </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No work orders</p> : (
           <>
+          <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
             <SortableHeader label="WO #" sortKey="wo_no" direction={getSortDirection("wo_no")} onToggle={toggleSort} />
             <SortableHeader label="Title" sortKey="title" direction={getSortDirection("title")} onToggle={toggleSort} />
             <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
             <SortableHeader label="Priority" sortKey="priority" direction={getSortDirection("priority")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-            <SortableHeader label="Due Date" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
+            <SortableHeader label="Due" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
+            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="text-xs">{r.wo_no}</TableCell><TableCell className="font-medium">{r.title}</TableCell><TableCell><Badge variant="outline">{r.type}</Badge></TableCell><TableCell><Badge variant={r.priority === "high" ? "destructive" : "secondary"}>{r.priority}</Badge></TableCell><TableCell><Badge className={stColor[r.status] || ""}>{r.status}</Badge></TableCell><TableCell>{r.due_date}</TableCell></TableRow>
-            ))}</TableBody></Table>
+              <TableRow key={r.id}>
+                <TableCell className="text-xs font-mono">{r.wo_no}</TableCell>
+                <TableCell className="font-medium">{r.title}</TableCell>
+                <TableCell><Badge variant="outline">{r.type}</Badge></TableCell>
+                <TableCell><Badge variant={r.priority === "high" || r.priority === "critical" ? "destructive" : "secondary"}>{r.priority}</Badge></TableCell>
+                <TableCell><Badge className={stColor[r.status] || ""}>{r.status}</Badge></TableCell>
+                <TableCell>{r.due_date || "—"}</TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>))}</TableBody></Table>
+          </div>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </CardContent></Card>
-      <Dialog open={open} onOpenChange={setOpen}><DialogContent>
-        <DialogHeader><DialogTitle>New Work Order</DialogTitle></DialogHeader>
+
+      <Dialog open={open} onOpenChange={(o)=>{setOpen(o);if(!o){setEditingId(null);setForm(emptyForm);}}}><DialogContent>
+        <DialogHeader><DialogTitle>{editingId ? "Edit Work Order" : "New Work Order"}</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div><Label>Title</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
+          <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({...form, title: e.target.value})} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Type</Label><Select value={form.type} onValueChange={v => setForm({...form, type: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="corrective">Corrective</SelectItem><SelectItem value="preventive">Preventive</SelectItem><SelectItem value="emergency">Emergency</SelectItem></SelectContent></Select></div>
+            <div><Label>Type</Label><ComboboxSelect value={form.type} onValueChange={v => setForm({...form, type: v})} options={typeOptions} placeholder="Select or type..." /></div>
             <div><Label>Priority</Label><Select value={form.priority} onValueChange={v => setForm({...form, priority: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
           </div>
+          {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="closed">Closed</SelectItem></SelectContent></Select></div>}
           <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Creating..." : "Create"}</Button>
+          <Button className="w-full" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create"}</Button>
         </div>
       </DialogContent></Dialog>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Work Order Details</DialogTitle></DialogHeader>
+        {viewing && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-2">
+              {[["WO#",viewing.wo_no],["Title",viewing.title],["Type",viewing.type],["Priority",viewing.priority],["Status",viewing.status],["Due",viewing.due_date]].map(([l,v])=>(
+                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium">{v||"—"}</p></div>
+              ))}
+            </div>
+            {viewing.description && <div><p className="text-muted-foreground text-xs">Description</p><p>{viewing.description}</p></div>}
+          </div>
+        )}
+      </DialogContent></Dialog>
+
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Work Order?" onConfirm={() => deleteId && remove.mutate(deleteId)} />
     </div>
   );
 }

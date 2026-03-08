@@ -10,73 +10,146 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Receipt } from "lucide-react";
+import { Plus, Search, Receipt, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
+import { ComboboxSelect } from "@/components/ComboboxSelect";
+import { StatusFilter } from "@/components/StatusFilter";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { ExportButton } from "@/components/ExportButton";
+
+const stC: Record<string,string> = { draft: "bg-gray-100 text-gray-700", sent: "bg-blue-100 text-blue-700", paid: "bg-emerald-100 text-emerald-700", overdue: "bg-red-100 text-red-700" };
+const emptyForm = { client_id: "", due_date: "", subtotal: "", status: "draft" };
 
 export default function Invoices() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ client_id: "", due_date: "", subtotal: "" });
+  const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["invoices"],
-    queryFn: async () => { const { data } = await (supabase as any).from("invoices").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("invoices").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
-  const { data: clients = [] } = useQuery({ queryKey: ["clients-inv"], queryFn: async () => { const { data } = await (supabase as any).from("clients").select("id,name"); return data || []; } });
+  const { data: clients = [] } = useQuery({ queryKey: ["clients-inv"], queryFn: async () => { const { data } = await supabase.from("clients").select("id,name"); return data || []; } });
 
   const save = useMutation({
     mutationFn: async () => {
       const sub = parseFloat(form.subtotal) || 0;
       const vat = sub * 0.05;
-      const { error } = await (supabase as any).from("invoices").insert({ ...form, subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null });
-      if (error) throw error;
+      if (editingId) {
+        const { error } = await supabase.from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status }).eq("id", editingId);
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null });
+        if (error) throw error;
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Invoice created"); setOpen(false); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success(editingId ? "Updated" : "Invoice created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
     onError: (e: any) => toast.error(e.message),
   });
 
-  const filtered = data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
-  const stC: Record<string,string> = { draft: "bg-gray-100 text-gray-700", sent: "bg-blue-100 text-blue-700", paid: "bg-emerald-100 text-emerald-700", overdue: "bg-red-100 text-red-700" };
+  const remove = useMutation({
+    mutationFn: async (id: string) => { const { error } = await supabase.from("invoices").delete().eq("id", id); if (error) throw error; },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Deleted"); setDeleteId(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const handleEdit = (r: any) => {
+    setEditingId(r.id);
+    setForm({ client_id: r.client_id||"", due_date: r.due_date||"", subtotal: String(r.subtotal||""), status: r.status||"draft" });
+    setOpen(true);
+  };
+
+  const filtered = data.filter((r: any) => {
+    const matchSearch = JSON.stringify(r).toLowerCase().includes(search.toLowerCase());
+    const matchStatus = statusFilter === "all" || r.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
+
+  const statuses = [
+    { value: "all", label: "All", count: data.length },
+    { value: "draft", label: "Draft", count: data.filter((r: any) => r.status === "draft").length },
+    { value: "sent", label: "Sent", count: data.filter((r: any) => r.status === "sent").length },
+    { value: "paid", label: "Paid", count: data.filter((r: any) => r.status === "paid").length },
+    { value: "overdue", label: "Overdue", count: data.filter((r: any) => r.status === "overdue").length },
+  ];
+
+  const totalAmount = data.reduce((s:number,r:any)=>s+(r.total||0),0);
+  const paidAmount = data.filter((r:any)=>r.status==="paid").reduce((s:number,r:any)=>s+(r.total||0),0);
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3"><Receipt className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Invoices</h1></div>
-        <Button onClick={() => setOpen(true)}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3"><Receipt className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Invoices</h1><p className="text-sm text-muted-foreground">{data.length} invoices</p></div></div>
+        <div className="flex gap-2">
+          <ExportButton data={filtered} filename="invoices" columns={[{key:"invoice_no",label:"Invoice#"},{key:"clients.name",label:"Client"},{key:"total",label:"Total"},{key:"due_date",label:"Due"},{key:"status",label:"Status"}]} />
+          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Invoice</Button>
+        </div>
       </div>
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Invoiced</p><p className="text-2xl font-bold">AED {totalAmount.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Paid</p><p className="text-2xl font-bold text-success">AED {paidAmount.toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Outstanding</p><p className="text-2xl font-bold text-destructive">AED {(totalAmount-paidAmount).toLocaleString()}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Overdue</p><p className="text-2xl font-bold text-amber-600">{data.filter((r:any)=>r.status==="overdue").length}</p></CardContent></Card>
+      </div>
+
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
+        </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No invoices</p> : (
           <>
+          <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
             <SortableHeader label="Invoice #" sortKey="invoice_no" direction={getSortDirection("invoice_no")} onToggle={toggleSort} />
             <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
             <SortableHeader label="Total (AED)" sortKey="total" direction={getSortDirection("total")} onToggle={toggleSort} />
             <SortableHeader label="Due Date" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}><TableCell className="font-medium">{r.invoice_no}</TableCell><TableCell>{r.clients?.name || "—"}</TableCell><TableCell>{r.total?.toLocaleString()}</TableCell><TableCell>{r.due_date}</TableCell><TableCell><Badge className={stC[r.status] || ""}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>
+              <TableRow key={r.id}>
+                <TableCell className="font-mono text-xs">{r.invoice_no}</TableCell>
+                <TableCell>{r.clients?.name || "—"}</TableCell>
+                <TableCell className="font-medium">{r.total?.toLocaleString()}</TableCell>
+                <TableCell>{r.due_date || "—"}</TableCell>
+                <TableCell><Badge className={stC[r.status] || ""}>{r.status}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                  </div>
+                </TableCell>
+              </TableRow>))}</TableBody></Table>
+          </div>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </CardContent></Card>
-      <Dialog open={open} onOpenChange={setOpen}><DialogContent>
-        <DialogHeader><DialogTitle>New Invoice</DialogTitle></DialogHeader>
+
+      <Dialog open={open} onOpenChange={(o)=>{setOpen(o);if(!o){setEditingId(null);setForm(emptyForm);}}}><DialogContent>
+        <DialogHeader><DialogTitle>{editingId ? "Edit Invoice" : "New Invoice"}</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div><Label>Client</Label><Select value={form.client_id} onValueChange={v => setForm({...form, client_id: v})}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{clients.map((c: any) => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>Client</Label><ComboboxSelect value={form.client_id} onValueChange={v => setForm({...form, client_id: v})} options={clients.map((c:any)=>({value:c.id,label:c.name}))} placeholder="Select client..." allowCustom={false} /></div>
           <div><Label>Subtotal (AED)</Label><Input type="number" value={form.subtotal} onChange={e => setForm({...form, subtotal: e.target.value})} /><p className="text-xs text-muted-foreground mt-1">5% VAT auto-applied</p></div>
           <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({...form, due_date: e.target.value})} /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Creating..." : "Create Invoice"}</Button>
+          {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="sent">Sent</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="overdue">Overdue</SelectItem></SelectContent></Select></div>}
+          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Invoice"}</Button>
         </div>
       </DialogContent></Dialog>
+
+      <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Invoice?" onConfirm={() => deleteId && remove.mutate(deleteId)} />
     </div>
   );
 }
