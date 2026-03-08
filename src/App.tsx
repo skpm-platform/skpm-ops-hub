@@ -50,6 +50,7 @@ const GatePasses = lazy(() => import("./pages/GatePasses"));
 const Timesheets = lazy(() => import("./pages/Timesheets"));
 const DutyRoster = lazy(() => import("./pages/DutyRoster"));
 const MPBilling = lazy(() => import("./pages/MPBilling"));
+const MyProfile = lazy(() => import("./pages/MyProfile"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
