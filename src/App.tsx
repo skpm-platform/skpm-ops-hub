@@ -42,6 +42,9 @@ const Reports = lazy(() => import("./pages/Reports"));
 const VisitorLog = lazy(() => import("./pages/VisitorLog"));
 const Helpdesk = lazy(() => import("./pages/Helpdesk"));
 const AuditLogs = lazy(() => import("./pages/AuditLogs"));
+const LeaveManagement = lazy(() => import("./pages/LeaveManagement"));
+const Requisitions2 = lazy(() => import("./pages/Requisitions"));
+const Deployments = lazy(() => import("./pages/Deployments"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
@@ -89,6 +92,9 @@ const App = () => (
                 <Route path="employees" element={<Employees />} />
                 <Route path="attendance" element={<Attendance />} />
                 <Route path="manpower" element={<Manpower />} />
+                <Route path="leave" element={<LeaveManagement />} />
+                <Route path="requisitions" element={<Requisitions2 />} />
+                <Route path="deployments" element={<Deployments />} />
                 <Route path="payroll" element={<Payroll />} />
                 <Route path="assets" element={<Assets />} />
                 <Route path="warehouse" element={<Warehouse />} />

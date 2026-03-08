@@ -4,7 +4,7 @@ import {
   Briefcase, Receipt, CreditCard, ShoppingCart, FileSignature,
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
-  Truck, Home, Monitor, Contact,
+  Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -37,7 +37,10 @@ const navGroups = [
   { label: "People", items: [
     { title: "Employees", url: "/employees", icon: Users },
     { title: "Attendance", url: "/attendance", icon: Clock },
+    { title: "Leave", url: "/leave", icon: UserMinus },
     { title: "Manpower", url: "/manpower", icon: HardHat },
+    { title: "Requisitions", url: "/requisitions", icon: Send },
+    { title: "Deployments", url: "/deployments", icon: CalendarPlus },
     { title: "Payroll", url: "/payroll", icon: Wallet },
   ]},
   { label: "Assets & Inventory", items: [
