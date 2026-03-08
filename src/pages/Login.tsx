@@ -14,6 +14,8 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "forgot">("login");
+  const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
+  const logoSrc = companyLogoUrl || skpmLogo;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
