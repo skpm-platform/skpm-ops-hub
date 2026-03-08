@@ -102,7 +102,7 @@ export default function MPBilling() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Records</p><p className="text-2xl font-bold">{rows.length}</p></CardContent></Card>
       </div>
 
-      <StatusFilter statuses={statuses} current={statusFilter} onChange={setStatusFilter} />
+      <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
 
       <div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} /></div>
       <div className="rounded-lg border bg-card">
