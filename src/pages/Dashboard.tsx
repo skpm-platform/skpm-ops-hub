@@ -92,7 +92,7 @@ export default function Dashboard() {
   const { data: hseIncidents } = useQuery({
     queryKey: ["dashboard-hse"],
     queryFn: async () => {
-      const { data } = await supabase.from("hse_incidents").select("*").eq("status", "open");
+      const { data } = await supabase.from("hse_incidents").select("id").eq("status", "open");
       return data ?? [];
     },
   });
