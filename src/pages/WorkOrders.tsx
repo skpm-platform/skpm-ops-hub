@@ -7,12 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Wrench } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function WorkOrders() {
   const { user } = useAuth();
@@ -34,6 +37,7 @@ export default function WorkOrders() {
 
   const filtered = data.filter((r: any) => r.title?.toLowerCase().includes(search.toLowerCase()));
   const stColor: Record<string,string> = { open: "bg-blue-100 text-blue-700", in_progress: "bg-amber-100 text-amber-700", completed: "bg-emerald-100 text-emerald-700", closed: "bg-gray-100 text-gray-700" };
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -44,10 +48,21 @@ export default function WorkOrders() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No work orders</p> : (
-          <Table><TableHeader><TableRow><TableHead>WO #</TableHead><TableHead>Title</TableHead><TableHead>Type</TableHead><TableHead>Priority</TableHead><TableHead>Status</TableHead><TableHead>Due Date</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="WO #" sortKey="wo_no" direction={getSortDirection("wo_no")} onToggle={toggleSort} />
+            <SortableHeader label="Title" sortKey="title" direction={getSortDirection("title")} onToggle={toggleSort} />
+            <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+            <SortableHeader label="Priority" sortKey="priority" direction={getSortDirection("priority")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+            <SortableHeader label="Due Date" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
               <TableRow key={r.id}><TableCell className="text-xs">{r.wo_no}</TableCell><TableCell className="font-medium">{r.title}</TableCell><TableCell><Badge variant="outline">{r.type}</Badge></TableCell><TableCell><Badge variant={r.priority === "high" ? "destructive" : "secondary"}>{r.priority}</Badge></TableCell><TableCell><Badge className={stColor[r.status] || ""}>{r.status}</Badge></TableCell><TableCell>{r.due_date}</TableCell></TableRow>
-            ))}</TableBody></Table>)}
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>New Work Order</DialogTitle></DialogHeader>

@@ -7,10 +7,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, ShoppingCart } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function PurchaseOrders() {
   const { user } = useAuth();
@@ -31,6 +34,7 @@ export default function PurchaseOrders() {
   });
 
   const filtered = data.filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -41,10 +45,19 @@ export default function PurchaseOrders() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No purchase orders</p> : (
-          <Table><TableHeader><TableRow><TableHead>PO #</TableHead><TableHead>Vendor</TableHead><TableHead>Total (AED)</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => (
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="PO #" sortKey="po_no" direction={getSortDirection("po_no")} onToggle={toggleSort} />
+            <SortableHeader label="Vendor" sortKey="vendor" direction={getSortDirection("vendor")} onToggle={toggleSort} />
+            <SortableHeader label="Total (AED)" sortKey="total" direction={getSortDirection("total")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => (
               <TableRow key={r.id}><TableCell className="font-medium">{r.po_no}</TableCell><TableCell>{r.vendor}</TableCell><TableCell>{r.total?.toLocaleString()}</TableCell><TableCell><Badge variant={r.status === "received" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            ))}</TableBody></Table>)}
+            ))}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>New Purchase Order</DialogTitle></DialogHeader>

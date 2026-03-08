@@ -11,6 +11,9 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Users } from "lucide-react";
 import { toast } from "sonner";
+import { useDataTable } from "@/hooks/use-data-table";
+import { DataTablePagination } from "@/components/DataTablePagination";
+import { SortableHeader } from "@/components/SortableHeader";
 
 export default function Employees() {
   const qc = useQueryClient();
@@ -30,6 +33,7 @@ export default function Employees() {
   });
 
   const filtered = data.filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()));
+  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
     <div className="space-y-6">
@@ -40,12 +44,23 @@ export default function Employees() {
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search employees..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No employees</p> : (
-          <Table><TableHeader><TableRow><TableHead>ID</TableHead><TableHead>Name</TableHead><TableHead>Position</TableHead><TableHead>Nationality</TableHead><TableHead>Visa Expiry</TableHead><TableHead>Status</TableHead></TableRow></TableHeader>
-            <TableBody>{filtered.map((r: any) => {
+          <>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="ID" sortKey="employee_id" direction={getSortDirection("employee_id")} onToggle={toggleSort} />
+            <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+            <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
+            <SortableHeader label="Nationality" sortKey="nationality" direction={getSortDirection("nationality")} onToggle={toggleSort} />
+            <SortableHeader label="Visa Expiry" sortKey="visa_expiry" direction={getSortDirection("visa_expiry")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => {
               const visaExpiring = r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now() + 30*86400000);
               return (
               <TableRow key={r.id}><TableCell className="text-xs">{r.employee_id}</TableCell><TableCell className="font-medium">{r.name}</TableCell><TableCell>{r.position}</TableCell><TableCell>{r.nationality}</TableCell><TableCell><span className={visaExpiring ? "text-destructive font-medium" : ""}>{r.visa_expiry || "—"}</span></TableCell><TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell></TableRow>
-            );})}</TableBody></Table>)}
+            );})}</TableBody></Table>
+          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+          </>
+        )}
       </CardContent></Card>
       <Dialog open={open} onOpenChange={setOpen}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Add Employee</DialogTitle></DialogHeader>
