@@ -41,7 +41,7 @@ export default function Login() {
       <Card className="w-full max-w-md animate-fade-in shadow-xl border-border/50">
         <CardHeader className="text-center space-y-4 pb-2">
           <div className="flex justify-center">
-            <img src={skpmLogo} alt="SKPM Logo" className="h-16 w-16 rounded-xl" />
+            <img src={logoSrc} alt="SKPM Logo" className="h-16 w-16 rounded-xl object-contain" />
           </div>
           <div>
             <CardTitle className="text-2xl font-bold tracking-tight">SKPM Technical Service</CardTitle>
