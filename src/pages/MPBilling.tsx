@@ -45,7 +45,9 @@ export default function MPBilling() {
   });
 
   const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-  const statuses = buildStatuses(rows, "status", ["all","draft","submitted","invoiced","paid"]);
+  const statusCounts: Record<string, number> = {};
+  rows.forEach((r: any) => { statusCounts[r.status ?? "draft"] = (statusCounts[r.status ?? "draft"] || 0) + 1; });
+  const statuses = buildStatuses(statusCounts, ["draft","submitted","invoiced","paid"]);
 
   const filtered = rows.filter((r: any) => {
     const matchSearch = r.clients?.name?.toLowerCase().includes(search.toLowerCase()) || r.status?.toLowerCase().includes(search.toLowerCase());
