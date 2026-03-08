@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, FileText, Pencil, Trash2, Eye } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
