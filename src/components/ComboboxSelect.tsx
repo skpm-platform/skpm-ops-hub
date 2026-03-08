@@ -7,17 +7,23 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 
 interface ComboboxSelectProps {
   value: string;
-  onValueChange: (value: string) => void;
-  options: { value: string; label: string }[];
+  onValueChange?: (value: string) => void;
+  onChange?: (value: string) => void;
+  options: (string | { value: string; label: string })[];
   placeholder?: string;
   allowCustom?: boolean;
   className?: string;
 }
 
-export function ComboboxSelect({ value, onValueChange, options, placeholder = "Select or type...", allowCustom = true, className }: ComboboxSelectProps) {
+export function ComboboxSelect({ value, onValueChange, onChange, options: rawOptions, placeholder = "Select or type...", allowCustom = true, className }: ComboboxSelectProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const handleChange = (v: string) => { onValueChange?.(v); onChange?.(v); };
+
+  // Normalize options to { value, label }
+  const options = rawOptions.map(o => typeof o === "string" ? { value: o, label: o.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()) } : o);
 
   const filtered = options.filter(o => o.label.toLowerCase().includes(search.toLowerCase()));
   const selectedLabel = options.find(o => o.value === value)?.label || value;
@@ -33,7 +39,7 @@ export function ComboboxSelect({ value, onValueChange, options, placeholder = "S
           <span className="truncate">{value ? selectedLabel : placeholder}</span>
           <div className="flex items-center gap-1 ml-2 shrink-0">
             {value && (
-              <X className="h-3 w-3 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); onValueChange(""); }} />
+              <X className="h-3 w-3 opacity-50 hover:opacity-100" onClick={(e) => { e.stopPropagation(); handleChange(""); }} />
             )}
             <ChevronsUpDown className="h-3.5 w-3.5 opacity-50" />
           </div>
@@ -49,7 +55,7 @@ export function ComboboxSelect({ value, onValueChange, options, placeholder = "S
             className="h-8 text-sm"
             onKeyDown={(e) => {
               if (e.key === "Enter" && search && allowCustom) {
-                onValueChange(search);
+                handleChange(search);
                 setSearch("");
                 setOpen(false);
               }
@@ -64,7 +70,7 @@ export function ComboboxSelect({ value, onValueChange, options, placeholder = "S
                 "flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent hover:text-accent-foreground transition-colors",
                 value === option.value && "bg-accent"
               )}
-              onClick={() => { onValueChange(option.value); setSearch(""); setOpen(false); }}
+              onClick={() => { handleChange(option.value); setSearch(""); setOpen(false); }}
             >
               <Check className={cn("h-3.5 w-3.5 shrink-0", value === option.value ? "opacity-100" : "opacity-0")} />
               {option.label}
@@ -73,7 +79,7 @@ export function ComboboxSelect({ value, onValueChange, options, placeholder = "S
           {filtered.length === 0 && search && allowCustom && (
             <button
               className="flex items-center gap-2 w-full px-3 py-2 text-sm hover:bg-accent text-primary"
-              onClick={() => { onValueChange(search); setSearch(""); setOpen(false); }}
+              onClick={() => { handleChange(search); setSearch(""); setOpen(false); }}
             >
               + Use "{search}"
             </button>

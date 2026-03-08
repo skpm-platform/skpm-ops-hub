@@ -1,4 +1,3 @@
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 
 interface StatusFilterProps {
@@ -34,4 +33,13 @@ export function StatusFilter({ statuses, selected, onSelect }: StatusFilterProps
       ))}
     </div>
   );
+}
+
+// Helper to build statuses array from counts + options
+export function buildStatuses(counts: Record<string, number>, options: string[]): { value: string; label: string; count?: number }[] {
+  const total = Object.values(counts).reduce((s, n) => s + n, 0);
+  return [
+    { value: "all", label: "All", count: total },
+    ...options.map(o => ({ value: o, label: o.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase()), count: counts[o] || 0 })),
+  ];
 }
