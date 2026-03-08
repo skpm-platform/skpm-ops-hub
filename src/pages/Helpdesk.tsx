@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { logAudit } from "@/lib/audit";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,9 +53,11 @@ export default function Helpdesk() {
       if (editingId) {
         const { error } = await supabase.from("helpdesk_tickets").update(form).eq("id", editingId);
         if (error) throw error;
+        await logAudit("Updated ticket", form.title);
       } else {
         const { error } = await supabase.from("helpdesk_tickets").insert({ ...form, ticket_no: `TKT-${Date.now().toString().slice(-6)}`, raised_by: user?.id });
         if (error) throw error;
+        await logAudit("Created ticket", form.title);
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); toast.success(editingId ? "Updated" : "Ticket created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -62,7 +65,11 @@ export default function Helpdesk() {
   });
 
   const remove = useMutation({
-    mutationFn: async (id: string) => { const { error } = await supabase.from("helpdesk_tickets").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("helpdesk_tickets").delete().eq("id", id);
+      if (error) throw error;
+      await logAudit("Deleted ticket", id);
+    },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
   });
@@ -94,7 +101,7 @@ export default function Helpdesk() {
         <div className="flex items-center gap-3"><Monitor className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">IT Helpdesk</h1><p className="text-sm text-muted-foreground">{data.length} tickets</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={filtered} filename="tickets" columns={[{key:"ticket_no",label:"Ticket#"},{key:"title",label:"Title"},{key:"category",label:"Category"},{key:"priority",label:"Priority"},{key:"status",label:"Status"}]} />
-          <Button onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Ticket</Button>
+          <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />New Ticket</Button>
         </div>
       </div>
 
@@ -152,15 +159,15 @@ export default function Helpdesk() {
           </div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="closed">Closed</SelectItem></SelectContent></Select></div>}
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Ticket"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Ticket"}</Button>
         </div>
       </DialogContent></Dialog>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Ticket Details</DialogTitle></DialogHeader>
         {viewing && (
-          <div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-2">
-            {[["Ticket#",viewing.ticket_no],["Title",viewing.title],["Category",viewing.category],["Priority",viewing.priority],["Status",viewing.status]].map(([l,v])=>(
+          <div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-3">
+            {[["Ticket#",viewing.ticket_no],["Title",viewing.title],["Category",viewing.category],["Priority",viewing.priority],["Status",viewing.status],["Created",viewing.created_at?.slice(0,10)]].map(([l,v])=>(
               <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
             ))}
           </div>
