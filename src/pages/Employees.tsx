@@ -165,8 +165,12 @@ export default function Employees() {
         </div>
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No employees found</p> : (
           <>
+          <BulkActions selectedIds={bulk.selectedIds} totalItems={pageData.length} onSelectAll={bulk.selectAll} onClearSelection={bulk.clearSelection} onBulkDelete={() => bulkDelete.mutate()} allSelected={bulk.allSelected} />
           <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
+            <SortableHeader label="" sortKey="" direction={null} onToggle={() => {}}>
+              <Checkbox checked={bulk.allSelected} onCheckedChange={(c) => bulk.selectAll(!!c)} />
+            </SortableHeader>
             <SortableHeader label="ID" sortKey="employee_id" direction={getSortDirection("employee_id")} onToggle={toggleSort} />
             <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
             <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
@@ -179,7 +183,8 @@ export default function Employees() {
             <TableBody>{pageData.map((r: any) => {
               const visaExpiring = r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now() + 30*86400000);
               return (
-              <TableRow key={r.id}>
+              <TableRow key={r.id} className={bulk.isSelected(r.id) ? "bg-primary/5" : ""}>
+                <TableCell><Checkbox checked={bulk.isSelected(r.id)} onCheckedChange={() => bulk.toggle(r.id)} /></TableCell>
                 <TableCell className="text-xs font-mono">{r.employee_id}</TableCell>
                 <TableCell className="font-medium">{r.name}</TableCell>
                 <TableCell>{r.position || "—"}</TableCell>
