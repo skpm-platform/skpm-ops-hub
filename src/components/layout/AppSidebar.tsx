@@ -1,6 +1,6 @@
 import {
   LayoutDashboard, FolderKanban, CheckSquare, Wrench, Calendar as CalendarIcon,
-  Users, Clock, DollarSign, FileText, Settings, LogOut, Building2,
+  Users, Clock, DollarSign, FileText, Settings, LogOut,
   Briefcase, Receipt, CreditCard, ShoppingCart, FileSignature,
   HardHat, Wallet, Package, Shield, GraduationCap, Building,
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
@@ -18,6 +18,7 @@ import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Separator } from "@/components/ui/separator";
+import skpmLogo from "@/assets/skpm-logo.png";
 
 const navGroups = [
   { label: "Overview", items: [
@@ -99,9 +100,7 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-3">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-sidebar-primary">
-            <Building2 className="h-4 w-4 text-sidebar-primary-foreground" />
-          </div>
+          <img src={skpmLogo} alt="SKPM" className="h-8 w-8 shrink-0 rounded-md" />
           {!collapsed && (
             <div className="flex flex-col leading-none">
               <span className="text-[13px] font-semibold tracking-tight text-sidebar-accent-foreground">SKPM</span>
