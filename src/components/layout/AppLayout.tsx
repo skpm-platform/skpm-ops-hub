@@ -11,6 +11,8 @@ import { Button } from "@/components/ui/button";
 import { Search, PanelLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { useIdleTimeout } from "@/hooks/use-idle-timeout";
+import { useKeyboardShortcuts } from "@/hooks/use-keyboard-shortcuts";
 
 export function AppLayout() {
   const { user } = useAuth();
