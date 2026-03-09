@@ -12,7 +12,7 @@ import {
   Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown,
   ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase,
   Download, Shield, CalendarRange, Plus, Send, UserMinus, Wrench,
-  Receipt, Sparkles, ChevronRight, Zap,
+  Receipt, Sparkles, ChevronRight, Zap, FolderKanban,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
