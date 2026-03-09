@@ -11,6 +11,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Plus, Search, Package, Pencil, Trash2, Eye, LayoutGrid, List, Car, Monitor, Wrench, HardHat, Armchair, Cog, TrendingDown, AlertTriangle, Shield, User, MapPin } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -51,7 +52,7 @@ type AssetStatus = typeof statusFlow[number];
 const emptyForm = {
   name: "", category: "equipment", location: "", purchase_price: "", purchase_date: "", status: "active",
   assigned_to_employee: "", assigned_to_site: "", next_maintenance_date: "", warranty_expiry: "",
-  serial_number: "", model: "",
+  serial_number: "", model: "", photo_url: "",
 };
 
 function calcDepreciation(purchasePrice: number, purchaseDate: string | null): number {
@@ -118,6 +119,7 @@ export default function Assets() {
         warranty_expiry: form.warranty_expiry || null,
         serial_number: form.serial_number || null,
         model: form.model || null,
+        photo_url: form.photo_url || null,
       };
       if (editingId) {
         const { error } = await supabase.from("assets").update(payload).eq("id", editingId);
@@ -164,7 +166,7 @@ export default function Assets() {
       purchase_price: String(r.purchase_price || ""), purchase_date: r.purchase_date || "", status: r.status || "active",
       assigned_to_employee: r.assigned_to_employee || "", assigned_to_site: r.assigned_to_site || "",
       next_maintenance_date: r.next_maintenance_date || "", warranty_expiry: r.warranty_expiry || "",
-      serial_number: r.serial_number || "", model: r.model || "",
+      serial_number: r.serial_number || "", model: r.model || "", photo_url: r.photo_url || "",
     });
     setOpen(true);
   };
@@ -373,6 +375,7 @@ export default function Assets() {
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{editingId ? "Edit Asset" : "Add Asset"}</DialogTitle></DialogHeader>
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Asset Photo" size="md" folder="assets" />
           <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Model</Label><Input value={form.model} onChange={e => setForm({ ...form, model: e.target.value })} /></div>

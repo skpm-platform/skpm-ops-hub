@@ -27,6 +27,7 @@ import { StatusFilter } from "@/components/StatusFilter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ExportButton } from "@/components/ExportButton";
 import { BulkActions, useBulkSelect } from "@/components/BulkActions";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { format, differenceInDays } from "date-fns";
 import * as XLSX from "xlsx";
 
@@ -67,7 +68,7 @@ const statusColors: Record<string, string> = {
 const emptyForm = {
   name: "", trade: "electrician", nationality: "",
   visa_expiry: "", medical_expiry: "", safety_card_expiry: "",
-  daily_rate: "", status: "available",
+  daily_rate: "", status: "available", photo_url: "",
 };
 
 // Returns days until expiry (negative = expired)
@@ -156,6 +157,7 @@ export default function Manpower() {
         visa_expiry: form.visa_expiry || null,
         medical_expiry: form.medical_expiry || null,
         safety_card_expiry: form.safety_card_expiry || null,
+        photo_url: form.photo_url || null,
       };
       if (editingId) {
         const { error } = await supabase.from("workers").update(payload).eq("id", editingId);
@@ -219,6 +221,7 @@ export default function Manpower() {
       safety_card_expiry: r.safety_card_expiry || "",
       daily_rate: r.daily_rate ? String(r.daily_rate) : "",
       status: r.status || "available",
+      photo_url: r.photo_url || "",
     });
     setOpen(true);
   };
@@ -530,6 +533,7 @@ export default function Manpower() {
         <DialogContent className="max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Worker" : "Add Worker"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Worker Photo" size="md" folder="workers" />
             <div><Label>Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} placeholder="Full name" /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Trade</Label><ComboboxSelect value={form.trade} onValueChange={v => setForm({ ...form, trade: v })} options={tradeOptions} placeholder="Select or type trade..." /></div>
@@ -583,12 +587,15 @@ export default function Manpower() {
           <DialogHeader><DialogTitle>Worker Profile</DialogTitle></DialogHeader>
           {viewing && (
             <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div>
+              <div className="flex items-center gap-3">
+                <div className="h-16 w-16 rounded-full border overflow-hidden bg-muted flex items-center justify-center shrink-0">
+                  {viewing.photo_url ? <img src={viewing.photo_url} alt={viewing.name} className="w-full h-full object-cover" /> : <span className="text-2xl font-bold text-muted-foreground">{viewing.name?.[0]?.toUpperCase()}</span>}
+                </div>
+                <div className="flex-1">
                   <p className="text-lg font-semibold">{viewing.name}</p>
                   <p className="text-sm text-muted-foreground capitalize">{viewing.trade}</p>
+                  <Badge className={statusColors[viewing.status] || ""}>{viewing.status}</Badge>
                 </div>
-                <Badge className={statusColors[viewing.status] || ""}>{viewing.status}</Badge>
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 {[

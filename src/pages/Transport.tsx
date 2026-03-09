@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus, Search, Truck, Pencil, Trash2, Eye, LayoutGrid, List, Car, Bus, AlertTriangle, Calendar, Gauge, CheckCircle, Fuel, Wrench, User } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -71,7 +72,7 @@ export default function Transport() {
     make_model: "", plate_number: "", type: "car", capacity: "",
     registration_expiry: "", insurance_expiry: "", status: "active",
     last_fuel_date: "", fuel_level: "", next_service_date: "",
-    driver_id: "", odometer_km: "",
+    driver_id: "", odometer_km: "", photo_url: "",
   });
 
   const { data = [], isLoading } = useQuery({
@@ -93,7 +94,7 @@ export default function Transport() {
     make_model: "", plate_number: "", type: "car", capacity: "",
     registration_expiry: "", insurance_expiry: "", status: "active",
     last_fuel_date: "", fuel_level: "", next_service_date: "",
-    driver_id: "", odometer_km: "",
+    driver_id: "", odometer_km: "", photo_url: "",
   });
 
   const save = useMutation({
@@ -105,6 +106,7 @@ export default function Transport() {
         last_fuel_date: form.last_fuel_date || null, fuel_level: form.fuel_level || null,
         next_service_date: form.next_service_date || null,
         driver_id: form.driver_id || null, odometer_km: parseInt(form.odometer_km) || null,
+        photo_url: form.photo_url || null,
         ...(editingId ? {} : { vehicle_no: `VEH-${Date.now().toString().slice(-6)}` }),
       };
       if (editingId) { const { error } = await (supabase as any).from("vehicles").update(payload).eq("id", editingId); if (error) throw error; }
@@ -140,7 +142,7 @@ export default function Transport() {
       insurance_expiry: r.insurance_expiry || "", status: r.status || "active",
       last_fuel_date: r.last_fuel_date || "", fuel_level: r.fuel_level || "",
       next_service_date: r.next_service_date || "", driver_id: r.driver_id || "",
-      odometer_km: String(r.odometer_km || ""),
+      odometer_km: String(r.odometer_km || ""), photo_url: r.photo_url || "",
     });
     setOpen(true);
   };
@@ -338,6 +340,7 @@ export default function Transport() {
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Vehicle</DialogTitle></DialogHeader>
         <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+          <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Vehicle Photo" size="md" folder="vehicles" />
           <div><Label>Make/Model *</Label><Input value={form.make_model} onChange={e => setForm({ ...form, make_model: e.target.value })} /></div>
           <div><Label>Plate Number</Label><Input value={form.plate_number} onChange={e => setForm({ ...form, plate_number: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">

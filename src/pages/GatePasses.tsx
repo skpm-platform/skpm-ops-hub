@@ -69,7 +69,7 @@ export default function GatePasses() {
   rows.forEach((r: any) => { statusCounts[r.status ?? "pending"] = (statusCounts[r.status ?? "pending"] || 0) + 1; });
 
   const filtered = rows
-    .filter((r: any) => r.pass_no?.toLowerCase().includes(search.toLowerCase()) || r.workers?.name?.toLowerCase().includes(search.toLowerCase()))
+    .filter((r: any) => r.pass_no?.toLowerCase().includes(search.toLowerCase()) || r.manpower?.name?.toLowerCase().includes(search.toLowerCase()))
     .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
@@ -200,7 +200,7 @@ export default function GatePasses() {
         {viewItem && (
           <div className="space-y-3 text-sm">
             <div className="grid grid-cols-2 gap-3">
-              {[["Pass No",viewItem.pass_no],["Type",viewItem.pass_type],["Worker",viewItem.workers?.name],["Site",viewItem.sites?.name],["Valid From",viewItem.valid_from],["Valid Until",viewItem.valid_until],["Status",viewItem.status],["Notes",viewItem.notes]].map(([l,v])=>(
+              {[["Pass No",viewItem.pass_no],["Type",viewItem.pass_type],["Worker",viewItem.manpower?.name ?? viewItem.workers?.name],["Site",viewItem.sites?.name],["Valid From",viewItem.valid_from],["Valid Until",viewItem.valid_until],["Status",viewItem.status],["Notes",viewItem.notes]].map(([l,v])=>(
                 <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
               ))}
             </div>

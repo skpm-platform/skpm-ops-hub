@@ -21,6 +21,7 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ExportButton } from "@/components/ExportButton";
 import { CSVImportButton } from "@/components/CSVImportButton";
 import { BulkActions, useBulkSelect } from "@/components/BulkActions";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { Checkbox } from "@/components/ui/checkbox";
 import { format, differenceInDays } from "date-fns";
 
@@ -43,7 +44,7 @@ const nationalityOptions = [
   { value: "Emirati", label: "Emirati" }, { value: "Syrian", label: "Syrian" },
 ];
 
-const emptyForm = { name: "", email: "", phone: "", nationality: "", position: "", salary: "", join_date: "", visa_expiry: "", passport_no: "", visa_no: "" };
+const emptyForm = { name: "", email: "", phone: "", nationality: "", position: "", salary: "", join_date: "", visa_expiry: "", passport_no: "", visa_no: "", department: "", status: "active", photo_url: "" };
 
 export default function Employees() {
   const qc = useQueryClient();
@@ -65,7 +66,7 @@ export default function Employees() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { ...form, salary: parseFloat(form.salary) || 0 };
+      const payload = { ...form, salary: parseFloat(form.salary) || 0, department: form.department || null, status: form.status || "active", photo_url: form.photo_url || null };
       if (editingId) {
         const { error } = await supabase.from("employees").update(payload).eq("id", editingId);
         if (error) throw error;
@@ -93,7 +94,7 @@ export default function Employees() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ name: r.name || "", email: r.email || "", phone: r.phone || "", nationality: r.nationality || "", position: r.position || "", salary: String(r.salary || ""), join_date: r.join_date || "", visa_expiry: r.visa_expiry || "", passport_no: r.passport_no || "", visa_no: r.visa_no || "" });
+    setForm({ name: r.name || "", email: r.email || "", phone: r.phone || "", nationality: r.nationality || "", position: r.position || "", salary: String(r.salary || ""), join_date: r.join_date || "", visa_expiry: r.visa_expiry || "", passport_no: r.passport_no || "", visa_no: r.visa_no || "", department: r.department || "", status: r.status || "active", photo_url: r.photo_url || "" });
     setOpen(true);
   };
 
@@ -331,8 +332,8 @@ export default function Employees() {
               <Card key={r.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
                 <CardContent className="p-4">
                   <div className="flex items-start gap-3">
-                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${getAvatarColor(r.name || "")}`}>
-                      {getInitials(r.name || "?")}
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 overflow-hidden ${!r.photo_url ? getAvatarColor(r.name || "") : ""}`}>
+                      {r.photo_url ? <img src={r.photo_url} alt={r.name} className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display='none'; }} /> : getInitials(r.name || "?")}
                     </div>
                     <div className="min-w-0 flex-1">
                       <div className="flex items-center justify-between">
@@ -384,8 +385,8 @@ export default function Employees() {
                 <TableCell><Checkbox checked={bulk.isSelected(r.id)} onCheckedChange={() => bulk.toggle(r.id)} /></TableCell>
                 <TableCell>
                   <div className="flex items-center gap-2.5">
-                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(r.name || "")}`}>
-                      {getInitials(r.name || "?")}
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 overflow-hidden ${!r.photo_url ? getAvatarColor(r.name || "") : ""}`}>
+                      {r.photo_url ? <img src={r.photo_url} alt={r.name} className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display='none'; }} /> : getInitials(r.name || "?")}
                     </div>
                     <div>
                       <p className="font-medium text-sm">{r.name}</p>
@@ -440,6 +441,7 @@ export default function Employees() {
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Employee Photo" size="md" folder="employees" />
             <div><Label>Full Name *</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
             <div className="grid grid-cols-2 gap-3">
               <div><Label>Email</Label><Input type="email" value={form.email} onChange={e => setForm({...form, email: e.target.value})} /></div>
@@ -458,6 +460,8 @@ export default function Employees() {
               <div><Label>Visa No.</Label><Input value={form.visa_no} onChange={e => setForm({...form, visa_no: e.target.value})} /></div>
             </div>
             <div><Label>Visa Expiry</Label><Input type="date" value={form.visa_expiry} onChange={e => setForm({...form, visa_expiry: e.target.value})} /></div>
+            <div><Label>Department</Label><Input value={form.department} onChange={e => setForm({...form, department: e.target.value})} placeholder="e.g. Operations, HR, Finance..." /></div>
+            <div><Label>Status</Label><select className="w-full h-9 rounded-md border border-input bg-background px-3 text-sm" value={form.status} onChange={e => setForm({...form, status: e.target.value})}><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
             <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update Employee" : "Add Employee"}</Button>
           </div>
         </DialogContent>
@@ -470,8 +474,8 @@ export default function Employees() {
           {viewing && (
             <div className="space-y-4">
               <div className="flex items-center gap-3 pb-3 border-b">
-                <div className={`h-14 w-14 rounded-full flex items-center justify-center text-lg font-bold ${getAvatarColor(viewing.name || "")}`}>
-                  {getInitials(viewing.name || "?")}
+                <div className={`h-14 w-14 rounded-full flex items-center justify-center text-lg font-bold overflow-hidden ${!viewing.photo_url ? getAvatarColor(viewing.name || "") : ""}`}>
+                  {viewing.photo_url ? <img src={viewing.photo_url} alt={viewing.name} className="w-full h-full object-cover" onError={(e) => { (e.target as any).style.display='none'; }} /> : getInitials(viewing.name || "?")}
                 </div>
                 <div>
                   <h3 className="font-semibold text-lg">{viewing.name}</h3>

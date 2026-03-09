@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { Plus, Search, Shield, Pencil, Trash2, Eye, AlertTriangle, Flame, Droplets, HardHat, LayoutGrid, List, TrendingDown, CheckCircle2, XCircle } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -64,7 +65,7 @@ const investigationStatusColors: Record<string, string> = {
 
 const emptyForm = {
   type: "near_miss", description: "", injured_person: "", action_taken: "", date: "", status: "open",
-  severity: "medium", corrective_actions: "", root_cause: "", investigation_status: "Pending", is_near_miss: false as boolean,
+  severity: "medium", corrective_actions: "", root_cause: "", investigation_status: "Pending", is_near_miss: false as boolean, photo_url: "",
 };
 
 export default function HSE() {
@@ -133,7 +134,7 @@ export default function HSE() {
       action_taken: r.action_taken || "", date: r.date || "", status: r.status || "open",
       severity: r.severity || "medium", corrective_actions: r.corrective_actions || "",
       root_cause: r.root_cause || "", investigation_status: r.investigation_status || "Pending",
-      is_near_miss: r.is_near_miss || false,
+      is_near_miss: r.is_near_miss || false, photo_url: r.photo_url || "",
     });
     setOpen(true);
   };
@@ -376,6 +377,7 @@ export default function HSE() {
             <input type="checkbox" id="is_near_miss" checked={form.is_near_miss} onChange={e => setForm({ ...form, is_near_miss: e.target.checked })} className="h-4 w-4 rounded border accent-primary" />
             <Label htmlFor="is_near_miss">Near Miss</Label>
           </div>
+          <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Incident Evidence Photo" size="md" folder="incidents" />
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit Report"}</Button>
         </div>
       </DialogContent></Dialog>

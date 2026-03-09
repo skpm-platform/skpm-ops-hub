@@ -18,6 +18,7 @@ import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
 import { Plus, Search, Contact, LogOut, UserCheck, Eye, Trash2, Loader2, LayoutGrid, List, Users, Car, AlertTriangle, Calendar } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { toast } from "sonner";
 import { format, differenceInMinutes, isPast, startOfWeek } from "date-fns";
 
@@ -255,7 +256,7 @@ export default function VisitorLog() {
             <div><Label>Vehicle Plate</Label><Input value={form.vehicle_plate} onChange={e => setForm({ ...form, vehicle_plate: e.target.value })} /></div>
           </div>
           <div><Label>Expected Checkout</Label><Input type="datetime-local" value={form.expected_checkout} onChange={e => setForm({ ...form, expected_checkout: e.target.value })} /></div>
-          <div><Label>Photo URL (optional)</Label><Input value={form.photo_url} onChange={e => setForm({ ...form, photo_url: e.target.value })} placeholder="https://..." /></div>
+          <PhotoUpload value={form.photo_url} onChange={(url) => setForm({...form, photo_url: url || ""})} label="Visitor Photo (optional)" size="sm" folder="visitors" />
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Checking in..." : "Check In"}</Button>
         </div>
       </DialogContent></Dialog>

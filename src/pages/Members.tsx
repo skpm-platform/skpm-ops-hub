@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, Users, Pencil, Eye, ShieldCheck, UserCheck, UserPlus, Mail, Loader2 } from "lucide-react";
+import { PhotoUpload } from "@/components/PhotoUpload";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -33,7 +34,7 @@ export default function Members() {
   const [inviteOpen, setInviteOpen] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", status: "active" });
+  const [form, setForm] = useState({ name: "", status: "active", avatar_url: "" });
   const [inviteForm, setInviteForm] = useState({ email: "", role: "staff" });
 
   const HIDDEN_SUPER_ADMIN_EMAIL = "skpmsysteminfo@gmail.com";
@@ -66,7 +67,7 @@ export default function Members() {
   const updateMember = useMutation({
     mutationFn: async () => {
       if (!editingId) return;
-      const { error } = await supabase.from("profiles").update({ name: form.name, status: form.status }).eq("id", editingId);
+      const { error } = await supabase.from("profiles").update({ name: form.name, status: form.status, avatar_url: form.avatar_url || null }).eq("id", editingId);
       if (error) throw error;
       await logAudit("Updated member", `Updated ${form.name} status to ${form.status}`);
     },
@@ -128,7 +129,7 @@ export default function Members() {
 
   const handleEdit = (m: any) => {
     setEditingId(m.id);
-    setForm({ name: m.name ?? "", status: m.status ?? "active" });
+    setForm({ name: m.name ?? "", status: m.status ?? "active", avatar_url: m.avatar_url ?? "" });
     setEditOpen(true);
   };
 
@@ -261,6 +262,7 @@ export default function Members() {
       <Dialog open={editOpen} onOpenChange={(o) => { setEditOpen(o); if (!o) setEditingId(null); }}><DialogContent>
         <DialogHeader><DialogTitle>Edit Member</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          <PhotoUpload value={form.avatar_url} onChange={(url) => setForm({...form, avatar_url: url || ""})} label="Profile Photo" size="md" folder="avatars" />
           <div><Label>Name</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
           <div><Label>Status</Label>
             <Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}>
