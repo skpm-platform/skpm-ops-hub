@@ -445,7 +445,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* AI Insights + Bottom Row */}
+      {/* AI Insights + Expiry Alerts */}
       <div className="grid gap-4 lg:grid-cols-3">
         <AIInsightsWidget kpiData={{
           employees: employeeCount, presentToday, attendanceRate,
@@ -455,6 +455,7 @@ export default function Dashboard() {
           unpaidInvoices, unpaidTotal, openWorkOrders: openWO,
           openHSEIncidents: openHSE, pendingLeaves, pendingExpenses,
         }} />
+        <ExpiryAlertsWidget />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
