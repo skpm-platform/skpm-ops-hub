@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight, Printer, CheckCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -66,6 +66,56 @@ export default function Payroll() {
     mutationFn: async (id: string) => { const { error } = await (supabase as any).from("payroll").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payroll"] }); toast.success("Deleted"); setDeleteId(null); },
   });
+
+  const markPaid = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("payroll").update({ status: "paid" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["payroll"] });
+      toast.success("Marked as paid ✓");
+      setViewItem((prev: any) => prev?.id === id ? { ...prev, status: "paid" } : prev);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const printPayslip = (r: any) => {
+    const month = months[(r.month || 1) - 1];
+    const gross = (r.basic_salary || 0) + (r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0) + (r.overtime_pay || 0);
+    const html = `<!DOCTYPE html><html><head><title>Payslip - ${r.employees?.name || ""} ${month} ${r.year}</title>
+    <style>
+      body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; color: #111; }
+      h1 { font-size: 22px; margin: 0; } .subtitle { color: #666; font-size: 13px; margin-top: 4px; }
+      .header { display: flex; justify-content: space-between; border-bottom: 2px solid #111; padding-bottom: 12px; margin-bottom: 20px; }
+      table { width: 100%; border-collapse: collapse; } td { padding: 6px 0; font-size: 14px; }
+      td:last-child { text-align: right; } .divider { border-top: 1px solid #ddd; margin: 8px 0; }
+      .total td { font-weight: bold; font-size: 16px; border-top: 2px solid #111; padding-top: 10px; }
+      .paid { color: green; font-weight: bold; } .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; }
+      .status-paid { background: #dcfce7; color: #166534; } .status-draft { background: #f3f4f6; color: #374151; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <div class="header">
+      <div><h1>SKPM Technical Service</h1><div class="subtitle">Payslip — ${month} ${r.year}</div></div>
+      <div style="text-align:right"><div style="font-weight:bold">${r.employees?.name || "Employee"}</div>
+      <div class="badge status-${r.status}">${r.status?.toUpperCase()}</div></div>
+    </div>
+    <table>
+      <tr><td>Basic Salary</td><td>AED ${(r.basic_salary || 0).toLocaleString()}</td></tr>
+      <tr><td>Housing Allowance</td><td style="color:green">AED ${(r.housing_allowance || 0).toLocaleString()}</td></tr>
+      <tr><td>Transport Allowance</td><td style="color:green">AED ${(r.transport_allowance || 0).toLocaleString()}</td></tr>
+      <tr><td>Food Allowance</td><td style="color:green">AED ${(r.food_allowance || 0).toLocaleString()}</td></tr>
+      <tr><td>Overtime Pay</td><td style="color:green">AED ${(r.overtime_pay || 0).toLocaleString()}</td></tr>
+      <tr><td colspan="2"><div class="divider"></div></td></tr>
+      <tr><td>Gross Pay</td><td>AED ${gross.toLocaleString()}</td></tr>
+      <tr><td>Deductions</td><td style="color:red">- AED ${(r.deductions || 0).toLocaleString()}</td></tr>
+      <tr class="total"><td>Net Pay</td><td>AED ${(r.net_pay || 0).toLocaleString()}</td></tr>
+    </table>
+    <div style="margin-top:30px;font-size:11px;color:#999;">Generated: ${new Date().toLocaleDateString()} · SKPM Ops Hub</div>
+    </body></html>`;
+    const win = window.open("", "_blank");
+    if (win) { win.document.write(html); win.document.close(); win.print(); }
+  };
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
@@ -309,6 +359,16 @@ export default function Payroll() {
               <div className="flex justify-between"><span className="text-muted-foreground">Deductions</span><span className="text-destructive">- AED {viewItem.deductions?.toLocaleString()}</span></div>
               <Separator />
               <div className="flex justify-between text-lg font-bold"><span>Net Pay</span><span>AED {viewItem.net_pay?.toLocaleString()}</span></div>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" className="flex-1 h-9 gap-1.5" onClick={() => printPayslip(viewItem)}>
+                <Printer className="h-4 w-4" /> Print Payslip
+              </Button>
+              {viewItem.status !== "paid" && (
+                <Button className="flex-1 h-9 gap-1.5 bg-success text-white hover:bg-success/90" onClick={() => markPaid.mutate(viewItem.id)} disabled={markPaid.isPending}>
+                  <CheckCircle className="h-4 w-4" /> Mark as Paid
+                </Button>
+              )}
             </div>
           </div>
         )}
