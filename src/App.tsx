@@ -131,6 +131,8 @@ const App = () => (
                 <Route path="payroll" element={<RoleGuard allowedRoles={["admin", "manager"]}><Payroll /></RoleGuard>} />
                 <Route path="mp-billing" element={<RoleGuard allowedRoles={["admin", "manager"]}><MPBilling /></RoleGuard>} />
                 <Route path="reports" element={<RoleGuard allowedRoles={["admin", "manager"]}><Reports /></RoleGuard>} />
+                <Route path="financial-reports" element={<RoleGuard allowedRoles={["admin", "manager"]}><FinancialReports /></RoleGuard>} />
+                <Route path="approvals" element={<RoleGuard allowedRoles={["admin", "manager"]}><ApprovalCenter /></RoleGuard>} />
                 {/* Admin only routes */}
                 <Route path="members" element={<RoleGuard allowedRoles={["admin"]}><Members /></RoleGuard>} />
                 <Route path="audit-logs" element={<RoleGuard allowedRoles={["admin"]}><AuditLogs /></RoleGuard>} />
