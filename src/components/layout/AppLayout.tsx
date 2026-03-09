@@ -6,7 +6,6 @@ import { useProfile, useUserRole } from "@/hooks/use-profile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import { Breadcrumbs } from "@/components/Breadcrumbs";
 import { Button } from "@/components/ui/button";
 import { Search, PanelLeft } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
