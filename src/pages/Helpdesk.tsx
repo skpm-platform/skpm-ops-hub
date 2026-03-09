@@ -13,9 +13,9 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Monitor, Pencil, Trash2, Eye, LayoutGrid, List, AlertTriangle, Clock, CheckCircle, Wifi, Printer, Mail, HardDrive, Smartphone, Shield } from "lucide-react";
+import { Plus, Search, Monitor, Pencil, Trash2, Eye, LayoutGrid, List, AlertTriangle, Clock, CheckCircle, Wifi, Printer, Mail, HardDrive, Smartphone, Shield, User } from "lucide-react";
 import { toast } from "sonner";
-import { format, differenceInHours } from "date-fns";
+import { format, differenceInHours, formatDistanceToNow } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
@@ -40,7 +40,16 @@ const stColors: Record<string, { bg: string; icon: any }> = {
   closed: { bg: "bg-muted text-muted-foreground", icon: CheckCircle },
 };
 
-const emptyForm = { title: "", category: "other", priority: "medium", description: "", status: "open" };
+const emptyForm = { title: "", category: "other", priority: "medium", description: "", status: "open", assigned_to: "", resolution_notes: "" };
+
+function getSLABreach(ticket: any): boolean {
+  if (!ticket.created_at) return false;
+  if (ticket.status === "resolved" || ticket.status === "closed") return false;
+  const hoursOpen = differenceInHours(new Date(), new Date(ticket.created_at));
+  if ((ticket.priority === "high" || ticket.priority === "critical") && hoursOpen > 24) return true;
+  if (ticket.priority === "medium" && hoursOpen > 72) return true;
+  return false;
+}
 
 export default function Helpdesk() {
   const { user } = useAuth();
@@ -54,11 +63,20 @@ export default function Helpdesk() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<any>(null);
   const [form, setForm] = useState(emptyForm);
+  const [resolutionNotesDraft, setResolutionNotesDraft] = useState("");
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["tickets"],
     queryFn: async () => { const { data } = await supabase.from("helpdesk_tickets").select("*").order("created_at", { ascending: false }); return data || []; },
   });
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-list-hd"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+
+  const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));
+  const getAssigneeName = (id: string) => employees.find((e: any) => e.id === id)?.name || id;
 
   const save = useMutation({
     mutationFn: async () => {
@@ -76,6 +94,25 @@ export default function Helpdesk() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const markResolved = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("helpdesk_tickets").update({ status: "resolved", resolved_at: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Resolved ticket", id, "helpdesk");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); toast.success("Ticket resolved"); setViewOpen(false); setViewing(null); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const saveResolutionNotes = useMutation({
+    mutationFn: async ({ id, notes }: { id: string; notes: string }) => {
+      const { error } = await supabase.from("helpdesk_tickets").update({ resolution_notes: notes }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["tickets"] }); toast.success("Resolution notes saved"); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const remove = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("helpdesk_tickets").delete().eq("id", id);
@@ -88,7 +125,7 @@ export default function Helpdesk() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ title: r.title || "", category: r.category || "other", priority: r.priority || "medium", description: r.description || "", status: r.status || "open" });
+    setForm({ title: r.title || "", category: r.category || "other", priority: r.priority || "medium", description: r.description || "", status: r.status || "open", assigned_to: r.assigned_to || "", resolution_notes: r.resolution_notes || "" });
     setOpen(true);
   };
 
@@ -172,6 +209,7 @@ export default function Helpdesk() {
               const CatIcon = catIcons[r.category] || Monitor;
               const st = stColors[r.status] || stColors.open;
               const StIcon = st.icon;
+              const slaBreach = getSLABreach(r);
               return (
                 <Card key={r.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
                   <CardContent className="p-4">
@@ -186,12 +224,19 @@ export default function Helpdesk() {
                       <Badge variant="secondary" className={`${st.bg} border-0 text-[10px] gap-1`}><StIcon className="h-3 w-3" />{r.status?.replace("_", " ")}</Badge>
                     </div>
                     {r.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{r.description}</p>}
+                    {r.assigned_to && <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><User className="h-3 w-3" />{getAssigneeName(r.assigned_to)}</p>}
                     <div className="flex items-center justify-between text-xs">
                       <Badge variant="outline" className="capitalize text-[10px]">{r.category}</Badge>
-                      <Badge variant="secondary" className={`${prioColors[r.priority] || ""} border-0 text-[10px]`}>{r.priority}</Badge>
+                      <div className="flex gap-1">
+                        {slaBreach && <Badge variant="destructive" className="text-[10px] px-1.5">SLA Breached</Badge>}
+                        <Badge variant="secondary" className={`${prioColors[r.priority] || ""} border-0 text-[10px]`}>{r.priority}</Badge>
+                      </div>
                     </div>
+                    {r.created_at && (
+                      <p className="text-[10px] text-muted-foreground mt-2">{formatDistanceToNow(new Date(r.created_at), { addSuffix: true })}</p>
+                    )}
                     <div className="flex gap-1 mt-3 pt-2 border-t justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3 w-3 mr-1" />View</Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setViewing(r); setResolutionNotesDraft(r.resolution_notes || ""); setViewOpen(true); }}><Eye className="h-3 w-3 mr-1" />View</Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3" /></Button>
                     </div>
@@ -211,23 +256,31 @@ export default function Helpdesk() {
             <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
             <SortableHeader label="Priority" sortKey="priority" direction={getSortDirection("priority")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-            <SortableHeader label="Created" sortKey="created_at" direction={getSortDirection("created_at")} onToggle={toggleSort} />
+            <SortableHeader label="Assigned" sortKey="assigned_to" direction={getSortDirection("assigned_to")} onToggle={toggleSort} />
+            <SortableHeader label="Age" sortKey="created_at" direction={getSortDirection("created_at")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => {
               const st = stColors[r.status] || stColors.open;
               const StIcon = st.icon;
+              const slaBreach = getSLABreach(r);
               return (
               <TableRow key={r.id} className="group">
                 <TableCell className="text-xs font-mono">{r.ticket_no}</TableCell>
                 <TableCell className="font-medium max-w-[200px] truncate">{r.title}</TableCell>
                 <TableCell><Badge variant="outline" className="capitalize text-[10px]">{r.category}</Badge></TableCell>
-                <TableCell><Badge variant="secondary" className={`${prioColors[r.priority] || ""} border-0 text-[10px]`}>{r.priority}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex gap-1 flex-wrap">
+                    <Badge variant="secondary" className={`${prioColors[r.priority] || ""} border-0 text-[10px]`}>{r.priority}</Badge>
+                    {slaBreach && <Badge variant="destructive" className="text-[10px] px-1.5">SLA</Badge>}
+                  </div>
+                </TableCell>
                 <TableCell><Badge variant="secondary" className={`${st.bg} border-0 gap-1 text-[10px]`}><StIcon className="h-3 w-3" />{r.status?.replace("_", " ")}</Badge></TableCell>
-                <TableCell className="text-xs text-muted-foreground">{r.created_at ? format(new Date(r.created_at), "dd MMM HH:mm") : "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.assigned_to ? getAssigneeName(r.assigned_to) : "—"}</TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.created_at ? formatDistanceToNow(new Date(r.created_at), { addSuffix: true }) : "—"}</TableCell>
                 <TableCell>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setResolutionNotesDraft(r.resolution_notes || ""); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
@@ -249,23 +302,51 @@ export default function Helpdesk() {
             <div><Label>Priority</Label><Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
           </div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="resolved">Resolved</SelectItem><SelectItem value="closed">Closed</SelectItem></SelectContent></Select></div>}
+          <div><Label>Assigned To</Label><ComboboxSelect value={form.assigned_to} onValueChange={v => setForm({ ...form, assigned_to: v })} options={employeeOptions} placeholder="Select assignee..." allowCustom={false} /></div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+          {editingId && <div><Label>Resolution Notes</Label><Textarea value={form.resolution_notes} onChange={e => setForm({ ...form, resolution_notes: e.target.value })} placeholder="Notes on how the issue was resolved..." /></div>}
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Ticket"}</Button>
         </div>
       </DialogContent></Dialog>
 
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Ticket Details</DialogTitle></DialogHeader>
-        {viewing && (
-          <div className="space-y-3 text-sm"><div className="grid grid-cols-2 gap-3">
-            {[["Ticket#", viewing.ticket_no], ["Title", viewing.title], ["Category", viewing.category], ["Priority", viewing.priority], ["Status", viewing.status], ["Created", viewing.created_at ? format(new Date(viewing.created_at), "dd MMM yyyy HH:mm") : "—"]].map(([l, v]) => (
-              <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v || "—"}</p></div>
-            ))}
-          </div>
-          {viewing.description && <div><p className="text-muted-foreground text-xs">Description</p><p>{viewing.description}</p></div>}
-          {viewing.resolution_notes && <div><p className="text-muted-foreground text-xs">Resolution Notes</p><p>{viewing.resolution_notes}</p></div>}
-          </div>
-        )}
+        {viewing && (() => {
+          const st = stColors[viewing.status] || stColors.open;
+          const StIcon = st.icon;
+          const slaBreach = getSLABreach(viewing);
+          const canResolve = viewing.status !== "resolved" && viewing.status !== "closed";
+          return (
+            <div className="space-y-3 text-sm">
+              <div className="flex flex-wrap gap-2">
+                <Badge variant="secondary" className={`${st.bg} border-0 gap-1`}><StIcon className="h-3.5 w-3.5" />{viewing.status?.replace("_", " ")}</Badge>
+                <Badge variant="secondary" className={`${prioColors[viewing.priority] || ""} border-0`}>{viewing.priority}</Badge>
+                {slaBreach && <Badge variant="destructive">SLA Breached</Badge>}
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                {[["Ticket#", viewing.ticket_no], ["Title", viewing.title], ["Category", viewing.category], ["Created", viewing.created_at ? format(new Date(viewing.created_at), "dd MMM yyyy HH:mm") : "—"]].map(([l, v]) => (
+                  <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v || "—"}</p></div>
+                ))}
+                {viewing.assigned_to && <div><p className="text-muted-foreground text-xs">Assigned To</p><p className="font-medium flex items-center gap-1"><User className="h-3.5 w-3.5" />{getAssigneeName(viewing.assigned_to)}</p></div>}
+                {viewing.resolved_at && <div><p className="text-muted-foreground text-xs">Resolved At</p><p className="font-medium">{format(new Date(viewing.resolved_at), "dd MMM yyyy HH:mm")}</p></div>}
+              </div>
+              {viewing.description && <div><p className="text-muted-foreground text-xs">Description</p><p className="bg-muted p-2 rounded text-sm">{viewing.description}</p></div>}
+              {/* Resolution notes with inline edit */}
+              <div>
+                <p className="text-muted-foreground text-xs mb-1">Resolution Notes</p>
+                <Textarea value={resolutionNotesDraft} onChange={e => setResolutionNotesDraft(e.target.value)} placeholder="Add resolution notes..." className="text-sm" />
+                <Button size="sm" variant="outline" className="mt-2 h-7 text-xs" onClick={() => saveResolutionNotes.mutate({ id: viewing.id, notes: resolutionNotesDraft })} disabled={saveResolutionNotes.isPending}>
+                  {saveResolutionNotes.isPending ? "Saving..." : "Save Notes"}
+                </Button>
+              </div>
+              {canResolve && (
+                <Button className="w-full" onClick={() => markResolved.mutate(viewing.id)} disabled={markResolved.isPending}>
+                  <CheckCircle className="h-4 w-4 mr-2" />{markResolved.isPending ? "Resolving..." : "Mark Resolved"}
+                </Button>
+              )}
+            </div>
+          );
+        })()}
       </DialogContent></Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Ticket?" onConfirm={() => deleteId && remove.mutate(deleteId)} />

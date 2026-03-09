@@ -13,10 +13,9 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus, Search, FolderKanban, Pencil, Trash2, Eye, TrendingUp,
-  Calendar, DollarSign, AlertTriangle, LayoutGrid, List,
+  Calendar, DollarSign, AlertTriangle, LayoutGrid, List, User, Flag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays, isPast } from "date-fns";
@@ -31,7 +30,7 @@ import { ExportButton } from "@/components/ExportButton";
 const statusColors: Record<string, string> = { active: "bg-success/15 text-success", completed: "bg-primary/15 text-primary", on_hold: "bg-warning/15 text-warning", cancelled: "bg-destructive/15 text-destructive" };
 const statusDot: Record<string, string> = { active: "bg-success", completed: "bg-primary", on_hold: "bg-warning", cancelled: "bg-destructive" };
 const priorityColors: Record<string, string> = { high: "bg-destructive/15 text-destructive border-destructive/20", medium: "bg-warning/15 text-warning border-warning/20", low: "bg-info/15 text-info border-info/20" };
-const emptyForm = { name: "", description: "", status: "active", priority: "medium", budget: "", start_date: "", end_date: "", client_id: "" };
+const emptyForm = { name: "", description: "", status: "active", priority: "medium", budget: "", actual_spend: "", start_date: "", end_date: "", client_id: "", completion_pct: "", manager_id: "", milestones_total: "", milestones_done: "" };
 
 export default function Projects() {
   const { user } = useAuth();
@@ -45,6 +44,7 @@ export default function Projects() {
   const [viewing, setViewing] = useState<any>(null);
   const [form, setForm] = useState(emptyForm);
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
+  const [inlineStatus, setInlineStatus] = useState<Record<string, boolean>>({});
 
   const { data: projects = [], isLoading } = useQuery({
     queryKey: ["projects"],
@@ -54,10 +54,26 @@ export default function Projects() {
     queryKey: ["clients-list"],
     queryFn: async () => { const { data } = await supabase.from("clients").select("id, name"); return data || []; },
   });
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-list-proj"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+
+  const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));
+  const getManagerName = (id: string) => employees.find((e: any) => e.id === id)?.name || id;
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { ...form, budget: parseFloat(form.budget) || 0, client_id: form.client_id || null };
+      const payload = {
+        ...form,
+        budget: parseFloat(form.budget) || 0,
+        actual_spend: form.actual_spend ? parseFloat(form.actual_spend) : null,
+        client_id: form.client_id || null,
+        manager_id: form.manager_id || null,
+        completion_pct: form.completion_pct ? parseInt(form.completion_pct) : null,
+        milestones_total: form.milestones_total ? parseInt(form.milestones_total) : null,
+        milestones_done: form.milestones_done ? parseInt(form.milestones_done) : null,
+      };
       if (editingId) {
         const { error } = await supabase.from("projects").update(payload).eq("id", editingId);
         if (error) throw error;
@@ -69,6 +85,16 @@ export default function Projects() {
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success(editingId ? "Project updated" : "Project created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const quickStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await supabase.from("projects").update({ status }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Updated project status", `${id} → ${status}`, "projects");
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["projects"] }); toast.success("Status updated"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -85,7 +111,15 @@ export default function Projects() {
 
   const handleEdit = (p: any) => {
     setEditingId(p.id);
-    setForm({ name: p.name||"", description: p.description||"", status: p.status||"active", priority: p.priority||"medium", budget: String(p.budget||""), start_date: p.start_date||"", end_date: p.end_date||"", client_id: p.client_id||"" });
+    setForm({
+      name: p.name || "", description: p.description || "", status: p.status || "active", priority: p.priority || "medium",
+      budget: String(p.budget || ""), actual_spend: p.actual_spend != null ? String(p.actual_spend) : "",
+      start_date: p.start_date || "", end_date: p.end_date || "", client_id: p.client_id || "",
+      completion_pct: p.completion_pct != null ? String(p.completion_pct) : "",
+      manager_id: p.manager_id || "",
+      milestones_total: p.milestones_total != null ? String(p.milestones_total) : "",
+      milestones_done: p.milestones_done != null ? String(p.milestones_done) : "",
+    });
     setOpen(true);
   };
 
@@ -105,15 +139,24 @@ export default function Projects() {
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
   const totalBudget = projects.reduce((s: number, p: any) => s + (p.budget || 0), 0);
-  const totalSpent = projects.reduce((s: number, p: any) => s + (p.spent || 0), 0);
+  const totalSpent = projects.reduce((s: number, p: any) => s + (p.actual_spend || p.spent || 0), 0);
   const overallBudgetUsed = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
 
-  const getProjectProgress = (p: any) => {
+  const getCompletionPct = (p: any) => {
+    if (p.completion_pct != null) return Number(p.completion_pct);
     if (!p.start_date || !p.end_date) return null;
     const total = differenceInDays(new Date(p.end_date), new Date(p.start_date));
     const elapsed = differenceInDays(new Date(), new Date(p.start_date));
     if (total <= 0) return 100;
     return Math.min(100, Math.max(0, Math.round((elapsed / total) * 100)));
+  };
+
+  const getDaysRemainingBadge = (p: any) => {
+    if (!p.end_date) return null;
+    const days = differenceInDays(new Date(p.end_date), new Date());
+    if (days < 0) return <Badge variant="destructive" className="text-[10px] px-1.5">{Math.abs(days)}d overdue</Badge>;
+    if (days <= 30) return <Badge className="text-[10px] px-1.5 bg-warning/15 text-warning border-0">{days}d left</Badge>;
+    return <Badge className="text-[10px] px-1.5 bg-success/15 text-success border-0">{days}d left</Badge>;
   };
 
   return (
@@ -221,8 +264,10 @@ export default function Projects() {
           /* Grid View */
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {filtered.map((p: any) => {
-              const budgetPct = p.budget > 0 ? Math.min(100, Math.round(((p.spent || 0) / p.budget) * 100)) : 0;
-              const timeProgress = getProjectProgress(p);
+              const actualSpend = p.actual_spend != null ? p.actual_spend : (p.spent || 0);
+              const budgetPct = p.budget > 0 ? Math.min(100, Math.round((actualSpend / p.budget) * 100)) : 0;
+              const budgetOver = p.budget > 0 && actualSpend > p.budget;
+              const completionPct = getCompletionPct(p);
               return (
                 <Card key={p.id} className="group hover:shadow-lg transition-all border hover:border-primary/20 overflow-hidden">
                   <CardContent className="p-0">
@@ -243,34 +288,40 @@ export default function Projects() {
                       <div className="flex gap-2">
                         <Badge className={`border-0 text-[10px] ${statusColors[p.status] || ""}`}>{p.status}</Badge>
                         <Badge variant="outline" className={`text-[10px] ${priorityColors[p.priority] || ""}`}>{p.priority}</Badge>
+                        {p.manager_id && <span className="text-[10px] text-muted-foreground flex items-center gap-0.5"><User className="h-3 w-3" />{getManagerName(p.manager_id)}</span>}
                       </div>
 
                       {p.description && <p className="text-xs text-muted-foreground line-clamp-2">{p.description}</p>}
 
-                      {/* Budget Progress */}
+                      {/* Completion Progress */}
+                      {completionPct !== null && (
+                        <div className="space-y-1">
+                          <div className="flex justify-between text-[10px]">
+                            <span className="text-muted-foreground">Completion</span>
+                            <span className="font-medium">{completionPct}%</span>
+                          </div>
+                          <Progress value={completionPct} className="h-1.5" />
+                        </div>
+                      )}
+
+                      {/* Budget vs Actual */}
                       {p.budget > 0 && (
                         <div className="space-y-1">
                           <div className="flex justify-between text-[10px]">
                             <span className="text-muted-foreground">Budget</span>
-                            <span className={`font-medium ${budgetPct >= 80 ? "text-destructive" : "text-muted-foreground"}`}>{budgetPct}% used</span>
+                            <span className={`font-medium ${budgetOver ? "text-destructive" : budgetPct >= 80 ? "text-destructive" : "text-muted-foreground"}`}>{budgetPct}% used</span>
                           </div>
                           <Progress value={budgetPct} className="h-1.5" />
-                          <p className="text-[10px] text-muted-foreground">AED {(p.spent || 0).toLocaleString()} / {p.budget.toLocaleString()}</p>
+                          <p className={`text-[10px] ${budgetOver ? "text-destructive" : "text-muted-foreground"}`}>AED {actualSpend.toLocaleString()} / {p.budget.toLocaleString()}</p>
                         </div>
                       )}
 
-                      {/* Timeline Progress */}
-                      {timeProgress !== null && (
-                        <div className="space-y-1">
-                          <div className="flex justify-between text-[10px]">
-                            <span className="text-muted-foreground">Timeline</span>
-                            <span className={`font-medium ${timeProgress >= 100 && p.status === "active" ? "text-destructive" : "text-muted-foreground"}`}>{timeProgress}%</span>
-                          </div>
-                          <Progress value={timeProgress} className="h-1.5" />
-                          <div className="flex justify-between text-[10px] text-muted-foreground">
-                            <span>{p.start_date ? format(new Date(p.start_date), "dd MMM") : ""}</span>
-                            <span>{p.end_date ? format(new Date(p.end_date), "dd MMM yyyy") : ""}</span>
-                          </div>
+                      {/* Days remaining */}
+                      {p.end_date && (
+                        <div className="flex items-center gap-1.5">
+                          <Calendar className="h-3 w-3 text-muted-foreground" />
+                          <span className="text-[10px] text-muted-foreground">{format(new Date(p.end_date), "dd MMM yyyy")}</span>
+                          {getDaysRemainingBadge(p)}
                         </div>
                       )}
                     </div>
@@ -288,15 +339,17 @@ export default function Projects() {
             <SortableHeader label="Client" sortKey="clients.name" direction={getSortDirection("clients.name")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Priority" sortKey="priority" direction={getSortDirection("priority")} onToggle={toggleSort} />
+            <SortableHeader label="Progress" sortKey="completion_pct" direction={getSortDirection("completion_pct")} onToggle={toggleSort} />
             <SortableHeader label="Budget" sortKey="budget" direction={getSortDirection("budget")} onToggle={toggleSort} />
-            <SortableHeader label="Timeline" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
+            <SortableHeader label="Days Left" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((p: any) => {
-              const budgetPct = p.budget > 0 ? Math.min(100, Math.round(((p.spent || 0) / p.budget) * 100)) : 0;
+              const actualSpend = p.actual_spend != null ? p.actual_spend : (p.spent || 0);
+              const budgetPct = p.budget > 0 ? Math.min(100, Math.round((actualSpend / p.budget) * 100)) : 0;
+              const budgetOver = p.budget > 0 && actualSpend > p.budget;
               const budgetWarning = budgetPct >= 80;
-              const timeProgress = getProjectProgress(p);
-              const overdue = p.end_date && isPast(new Date(p.end_date)) && p.status === "active";
+              const completionPct = getCompletionPct(p);
               return (
               <TableRow key={p.id} className="group hover:bg-secondary/30">
                 <TableCell>
@@ -309,34 +362,40 @@ export default function Projects() {
                   </div>
                 </TableCell>
                 <TableCell className="text-muted-foreground">{p.clients?.name || "—"}</TableCell>
-                <TableCell><Badge className={`border-0 ${statusColors[p.status] || ""}`}>{p.status}</Badge></TableCell>
+                <TableCell>
+                  {inlineStatus[p.id] ? (
+                    <Select value={p.status} onValueChange={v => { quickStatus.mutate({ id: p.id, status: v }); setInlineStatus(s => ({ ...s, [p.id]: false })); }}>
+                      <SelectTrigger className="h-7 w-32 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_hold">On Hold</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent>
+                    </Select>
+                  ) : (
+                    <Badge className={`border-0 cursor-pointer ${statusColors[p.status] || ""}`} onClick={() => setInlineStatus(s => ({ ...s, [p.id]: true }))}>{p.status}</Badge>
+                  )}
+                </TableCell>
                 <TableCell><Badge variant="outline" className={`${priorityColors[p.priority] || ""}`}>{p.priority}</Badge></TableCell>
+                <TableCell>
+                  {completionPct !== null ? (
+                    <div className="space-y-1 min-w-[100px]">
+                      <div className="flex items-center gap-2">
+                        <Progress value={completionPct} className="h-1.5 flex-1" />
+                        <span className="text-[10px] font-medium text-muted-foreground">{completionPct}%</span>
+                      </div>
+                    </div>
+                  ) : <span className="text-xs text-muted-foreground">—</span>}
+                </TableCell>
                 <TableCell>
                   <div className="space-y-1 min-w-[120px]">
                     <span className="text-xs font-medium">AED {p.budget?.toLocaleString() || 0}</span>
                     {p.budget > 0 && (
                       <div className="flex items-center gap-2">
                         <Progress value={budgetPct} className="h-1.5 flex-1" />
-                        <span className={`text-[10px] font-medium ${budgetWarning ? "text-destructive" : "text-muted-foreground"}`}>{budgetPct}%</span>
+                        <span className={`text-[10px] font-medium ${budgetOver || budgetWarning ? "text-destructive" : "text-muted-foreground"}`}>{budgetPct}%</span>
                       </div>
                     )}
+                    {actualSpend > 0 && <span className={`text-[10px] ${budgetOver ? "text-destructive" : "text-muted-foreground"}`}>Spent: {actualSpend.toLocaleString()}</span>}
                   </div>
                 </TableCell>
-                <TableCell>
-                  {timeProgress !== null ? (
-                    <div className="space-y-1 min-w-[100px]">
-                      <div className="flex items-center gap-2">
-                        <Progress value={timeProgress} className="h-1.5 flex-1" />
-                        <span className={`text-[10px] font-medium ${overdue ? "text-destructive" : "text-muted-foreground"}`}>
-                          {overdue ? "Overdue" : `${timeProgress}%`}
-                        </span>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground">
-                        {p.end_date ? format(new Date(p.end_date), "dd MMM yyyy") : ""}
-                      </span>
-                    </div>
-                  ) : <span className="text-xs text-muted-foreground">—</span>}
-                </TableCell>
+                <TableCell>{getDaysRemainingBadge(p) || <span className="text-xs text-muted-foreground">—</span>}</TableCell>
                 <TableCell>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(p); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -360,11 +419,22 @@ export default function Projects() {
           <div><Label>Client</Label>
             <ComboboxSelect value={form.client_id} onValueChange={v => setForm({...form, client_id: v})} options={clients.map((c:any) => ({value:c.id, label:c.name}))} placeholder="Select client..." allowCustom={false} />
           </div>
+          <div><Label>Project Manager</Label>
+            <ComboboxSelect value={form.manager_id} onValueChange={v => setForm({...form, manager_id: v})} options={employeeOptions} placeholder="Select manager..." allowCustom={false} />
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="on_hold">On Hold</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="cancelled">Cancelled</SelectItem></SelectContent></Select></div>
             <div><Label>Priority</Label><Select value={form.priority} onValueChange={v => setForm({...form, priority: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem></SelectContent></Select></div>
           </div>
-          <div><Label>Budget (AED)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Budget (AED)</Label><Input type="number" value={form.budget} onChange={e => setForm({...form, budget: e.target.value})} /></div>
+            <div><Label>Actual Spend (AED)</Label><Input type="number" value={form.actual_spend} onChange={e => setForm({...form, actual_spend: e.target.value})} placeholder="0" /></div>
+          </div>
+          <div><Label>Completion % (0-100)</Label><Input type="number" min="0" max="100" value={form.completion_pct} onChange={e => setForm({...form, completion_pct: e.target.value})} placeholder="0" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Milestones Total</Label><Input type="number" min="0" value={form.milestones_total} onChange={e => setForm({...form, milestones_total: e.target.value})} placeholder="0" /></div>
+            <div><Label>Milestones Done</Label><Input type="number" min="0" value={form.milestones_done} onChange={e => setForm({...form, milestones_done: e.target.value})} placeholder="0" /></div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Start</Label><Input type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} /></div>
             <div><Label>End</Label><Input type="date" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} /></div>
@@ -378,8 +448,10 @@ export default function Projects() {
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>Project Details</DialogTitle></DialogHeader>
         {viewing && (() => {
-          const budgetPct = viewing.budget > 0 ? Math.min(100, Math.round(((viewing.spent || 0) / viewing.budget) * 100)) : 0;
-          const timeProgress = getProjectProgress(viewing);
+          const actualSpend = viewing.actual_spend != null ? viewing.actual_spend : (viewing.spent || 0);
+          const budgetPct = viewing.budget > 0 ? Math.min(100, Math.round((actualSpend / viewing.budget) * 100)) : 0;
+          const budgetOver = viewing.budget > 0 && actualSpend > viewing.budget;
+          const completionPct = getCompletionPct(viewing);
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
@@ -394,6 +466,7 @@ export default function Projects() {
                 <Badge className={`border-0 ${statusColors[viewing.status] || ""}`}>{viewing.status}</Badge>
                 <Badge variant="outline" className={priorityColors[viewing.priority] || ""}>{viewing.priority}</Badge>
                 {viewing.clients?.name && <Badge variant="secondary">{viewing.clients.name}</Badge>}
+                {viewing.manager_id && <Badge variant="outline" className="gap-1"><User className="h-3 w-3" />{getManagerName(viewing.manager_id)}</Badge>}
               </div>
 
               {viewing.description && <p className="text-sm text-muted-foreground">{viewing.description}</p>}
@@ -405,31 +478,42 @@ export default function Projects() {
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs text-muted-foreground font-medium">End Date</p>
-                  <p className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-muted-foreground" />{viewing.end_date ? format(new Date(viewing.end_date), "dd MMM yyyy") : "—"}</p>
+                  <p className="flex items-center gap-1.5"><Calendar className="h-3.5 w-3.5 text-muted-foreground" />{viewing.end_date ? format(new Date(viewing.end_date), "dd MMM yyyy") : "—"}{viewing.end_date && <span className="ml-1">{getDaysRemainingBadge(viewing)}</span>}</p>
                 </div>
               </div>
 
+              {/* Completion progress */}
+              {completionPct !== null && (
+                <div className="space-y-2 p-3 rounded-lg bg-secondary/50">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Completion</span>
+                    <span className="font-semibold">{completionPct}%</span>
+                  </div>
+                  <Progress value={completionPct} className="h-2" />
+                </div>
+              )}
+
+              {/* Budget vs Actual */}
               {viewing.budget > 0 && (
                 <div className="space-y-2 p-3 rounded-lg bg-secondary/50">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Budget Utilization</span>
-                    <span className={`font-semibold ${budgetPct >= 80 ? "text-destructive" : "text-foreground"}`}>{budgetPct}%</span>
+                    <span className="text-muted-foreground">Budget vs Actual</span>
+                    <span className={`font-semibold ${budgetOver ? "text-destructive" : budgetPct >= 80 ? "text-destructive" : "text-foreground"}`}>{budgetPct}%{budgetOver ? " OVER BUDGET" : ""}</span>
                   </div>
                   <Progress value={budgetPct} className="h-2" />
                   <div className="flex justify-between text-xs text-muted-foreground">
-                    <span>AED {(viewing.spent || 0).toLocaleString()} spent</span>
-                    <span>AED {viewing.budget.toLocaleString()} budget</span>
+                    <span className={budgetOver ? "text-destructive" : ""}>Actual: AED {actualSpend.toLocaleString()}</span>
+                    <span>Budget: AED {viewing.budget.toLocaleString()}</span>
                   </div>
                 </div>
               )}
 
-              {timeProgress !== null && (
-                <div className="space-y-2 p-3 rounded-lg bg-secondary/50">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Timeline Progress</span>
-                    <span className={`font-semibold ${timeProgress >= 100 && viewing.status === "active" ? "text-destructive" : "text-foreground"}`}>{timeProgress}%</span>
-                  </div>
-                  <Progress value={timeProgress} className="h-2" />
+              {/* Milestones */}
+              {(viewing.milestones_total > 0) && (
+                <div className="p-3 rounded-lg bg-secondary/50 space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Flag className="h-3.5 w-3.5" />Milestones</p>
+                  <p className="text-sm font-semibold">{viewing.milestones_done || 0} / {viewing.milestones_total} completed</p>
+                  <Progress value={viewing.milestones_total > 0 ? Math.round(((viewing.milestones_done || 0) / viewing.milestones_total) * 100) : 0} className="h-1.5" />
                 </div>
               )}
 

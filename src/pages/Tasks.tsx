@@ -17,7 +17,7 @@ import { ExportButton } from "@/components/ExportButton";
 import {
   Plus, Loader2, Trash2, Eye, CheckSquare, ListTodo, RotateCcw,
   CheckCircle2, Search, Clock, AlertTriangle, Calendar, Pencil,
-  Timer, ArrowRight, ArrowLeft, GripVertical,
+  Timer, ArrowRight, ArrowLeft, GripVertical, User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, isPast, differenceInDays, isToday, isTomorrow } from "date-fns";
@@ -63,7 +63,9 @@ export default function Tasks() {
   const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
-  const [form, setForm] = useState({ title: "", description: "", priority: "medium" as TaskPriority, dueDate: "", estimated_hours: "" });
+  const [priorityFilter, setPriorityFilter] = useState<"all" | TaskPriority>("all");
+  const [myTasksOnly, setMyTasksOnly] = useState(false);
+  const [form, setForm] = useState({ title: "", description: "", priority: "medium" as TaskPriority, dueDate: "", estimated_hours: "", assigned_to: "", progress: "" });
   const [draggedId, setDraggedId] = useState<string | null>(null);
   const [dragOverCol, setDragOverCol] = useState<string | null>(null);
 
@@ -72,13 +74,22 @@ export default function Tasks() {
     queryFn: async () => { const { data, error } = await supabase.from("tasks").select("*").order("created_at", { ascending: false }); if (error) throw error; return data ?? []; },
   });
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-list-tasks"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+
+  const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));
+
   const addTask = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not logged in");
       const payload: any = {
         title: form.title, description: form.description, priority: form.priority,
         due_date: form.dueDate || null, estimated_hours: form.estimated_hours ? Number(form.estimated_hours) : null,
-        status: "todo", created_by: user.id, assigned_to: user.id,
+        assigned_to: form.assigned_to || user.id,
+        progress: form.progress ? Number(form.progress) : 0,
+        status: editingTask ? editingTask.status : "todo", created_by: user.id,
       };
       if (editingTask) {
         const { error } = await supabase.from("tasks").update(payload).eq("id", editingTask.id);
@@ -94,7 +105,7 @@ export default function Tasks() {
       qc.invalidateQueries({ queryKey: ["tasks"] });
       setDialogOpen(false);
       setEditingTask(null);
-      setForm({ title: "", description: "", priority: "medium", dueDate: "", estimated_hours: "" });
+      setForm({ title: "", description: "", priority: "medium", dueDate: "", estimated_hours: "", assigned_to: "", progress: "" });
       toast.success(editingTask ? "Task updated" : "Task created");
     },
     onError: (e: Error) => toast.error(e.message),
@@ -127,11 +138,17 @@ export default function Tasks() {
 
   const handleEditTask = (task: any) => {
     setEditingTask(task);
-    setForm({ title: task.title, description: task.description || "", priority: task.priority || "medium", dueDate: task.due_date || "", estimated_hours: task.estimated_hours ? String(task.estimated_hours) : "" });
+    setForm({ title: task.title, description: task.description || "", priority: task.priority || "medium", dueDate: task.due_date || "", estimated_hours: task.estimated_hours ? String(task.estimated_hours) : "", assigned_to: task.assigned_to || "", progress: task.progress != null ? String(task.progress) : "" });
     setDialogOpen(true);
   };
 
-  const filteredTasks = tasks.filter(t => t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase()));
+  const filteredTasks = tasks.filter(t => {
+    const matchSearch = t.title.toLowerCase().includes(search.toLowerCase()) || (t.description || "").toLowerCase().includes(search.toLowerCase());
+    const matchPriority = priorityFilter === "all" || t.priority === priorityFilter;
+    const matchMyTasks = !myTasksOnly || t.assigned_to === user?.id;
+    return matchSearch && matchPriority && matchMyTasks;
+  });
+
   const totalEstimated = tasks.reduce((s, t) => s + Number(t.estimated_hours || 0), 0);
   const totalActual = tasks.reduce((s, t) => s + Number(t.actual_hours || 0), 0);
   const completedTasks = tasks.filter(t => t.status === "done").length;
@@ -152,7 +169,7 @@ export default function Tasks() {
         </div>
         <div className="flex gap-2">
           <ExportButton data={tasks} filename="tasks" columns={[{ key: "title", label: "Title" }, { key: "status", label: "Status" }, { key: "priority", label: "Priority" }, { key: "due_date", label: "Due Date" }]} />
-          <Button size="sm" className="h-9 gap-2" onClick={() => { setEditingTask(null); setForm({ title: "", description: "", priority: "medium", dueDate: "", estimated_hours: "" }); setDialogOpen(true); }}>
+          <Button size="sm" className="h-9 gap-2" onClick={() => { setEditingTask(null); setForm({ title: "", description: "", priority: "medium", dueDate: "", estimated_hours: "", assigned_to: "", progress: "" }); setDialogOpen(true); }}>
             <Plus className="h-4 w-4" />New Task
           </Button>
         </div>
@@ -190,10 +207,36 @@ export default function Tasks() {
         </Card>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-        <Input placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+      {/* Search + Filters */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative max-w-sm">
+          <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+          <Input placeholder="Search tasks..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" />
+        </div>
+        {/* Priority filter */}
+        <div className="flex gap-1.5 flex-wrap">
+          {(["all", "high", "medium", "low"] as const).map(p => (
+            <Button
+              key={p}
+              size="sm"
+              variant={priorityFilter === p ? "default" : "outline"}
+              className="h-9 capitalize"
+              onClick={() => setPriorityFilter(p)}
+            >
+              {p === "all" ? "All Priority" : p}
+            </Button>
+          ))}
+          {user && (
+            <Button
+              size="sm"
+              variant={myTasksOnly ? "default" : "outline"}
+              className="h-9 gap-1.5"
+              onClick={() => setMyTasksOnly(!myTasksOnly)}
+            >
+              <User className="h-3.5 w-3.5" />My Tasks
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Kanban Board */}
@@ -235,6 +278,8 @@ export default function Tasks() {
                       const dueDateInfo = getDueDateInfo(task.due_date);
                       const pConfig = priorityConfig[task.priority ?? "medium"];
                       const hoursProgress = task.estimated_hours && task.actual_hours ? Math.min(100, Math.round((task.actual_hours / task.estimated_hours) * 100)) : null;
+                      const taskProgress = task.progress != null ? Number(task.progress) : null;
+                      const assigneeName = employees.find((e: any) => e.id === task.assigned_to)?.name;
                       return (
                         <div
                           key={task.id}
@@ -259,6 +304,17 @@ export default function Tasks() {
                           {/* Description */}
                           {task.description && <p className="text-xs text-muted-foreground line-clamp-2 pl-6">{task.description}</p>}
 
+                          {/* Completion progress bar */}
+                          {taskProgress !== null && taskProgress > 0 && (
+                            <div className="pl-6 space-y-1">
+                              <div className="flex items-center justify-between text-[10px]">
+                                <span className="text-muted-foreground">Progress</span>
+                                <span className="font-medium">{taskProgress}%</span>
+                              </div>
+                              <Progress value={taskProgress} className="h-1.5" />
+                            </div>
+                          )}
+
                           {/* Time tracking progress */}
                           {hoursProgress !== null && (
                             <div className="pl-6 space-y-1">
@@ -267,6 +323,13 @@ export default function Tasks() {
                                 <span className="text-muted-foreground">{task.actual_hours}h / {task.estimated_hours}h</span>
                               </div>
                               <Progress value={hoursProgress} className="h-1" />
+                            </div>
+                          )}
+
+                          {/* Assignee */}
+                          {assigneeName && (
+                            <div className="pl-6 flex items-center gap-1 text-[10px] text-muted-foreground">
+                              <User className="h-3 w-3" />{assigneeName}
                             </div>
                           )}
 
@@ -319,6 +382,10 @@ export default function Tasks() {
             <div><Label>Due Date</Label><Input type="date" value={form.dueDate} onChange={e => setForm({ ...form, dueDate: e.target.value })} /></div>
             <div><Label>Est. Hours</Label><Input type="number" value={form.estimated_hours} onChange={e => setForm({ ...form, estimated_hours: e.target.value })} placeholder="0" /></div>
           </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Assigned To</Label><ComboboxSelect value={form.assigned_to} onValueChange={v => setForm({ ...form, assigned_to: v })} options={employeeOptions} placeholder="Select employee..." allowCustom={false} /></div>
+            <div><Label>Progress (%)</Label><Input type="number" min="0" max="100" value={form.progress} onChange={e => setForm({ ...form, progress: e.target.value })} placeholder="0-100" /></div>
+          </div>
           <Button onClick={() => addTask.mutate()} className="w-full h-9" disabled={!form.title || addTask.isPending}>
             {addTask.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />}
             {editingTask ? "Update Task" : "Create Task"}
@@ -333,6 +400,8 @@ export default function Tasks() {
           const dueDateInfo = getDueDateInfo(viewItem.due_date);
           const pConfig = priorityConfig[viewItem.priority || "medium"];
           const hoursProgress = viewItem.estimated_hours && viewItem.actual_hours ? Math.min(100, Math.round((viewItem.actual_hours / viewItem.estimated_hours) * 100)) : null;
+          const taskProgress = viewItem.progress != null ? Number(viewItem.progress) : null;
+          const assigneeName = employees.find((e: any) => e.id === viewItem.assigned_to)?.name;
           return (
             <div className="space-y-4">
               <div className="flex gap-2 flex-wrap">
@@ -356,7 +425,21 @@ export default function Tasks() {
                   <p className="text-xs text-muted-foreground font-medium">Created</p>
                   <p>{format(new Date(viewItem.created_at), "dd MMM yyyy")}</p>
                 </div>
+                {assigneeName && (
+                  <div className="space-y-1">
+                    <p className="text-xs text-muted-foreground font-medium">Assigned To</p>
+                    <p className="flex items-center gap-1.5"><User className="h-3.5 w-3.5 text-muted-foreground" />{assigneeName}</p>
+                  </div>
+                )}
               </div>
+              {taskProgress !== null && (
+                <div className="p-3 rounded-lg bg-secondary/50 space-y-2">
+                  <div className="flex justify-between text-xs font-medium text-muted-foreground">
+                    <span>Completion Progress</span><span>{taskProgress}%</span>
+                  </div>
+                  <Progress value={taskProgress} className="h-2" />
+                </div>
+              )}
               {(viewItem.estimated_hours > 0 || viewItem.actual_hours > 0) && (
                 <div className="p-3 rounded-lg bg-secondary/50 space-y-2">
                   <p className="text-xs font-medium text-muted-foreground">Time Tracking</p>

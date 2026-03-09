@@ -14,9 +14,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Wrench, Pencil, Trash2, Eye, LayoutGrid, List, AlertTriangle, Clock, CheckCircle2, Zap, Shield, Settings } from "lucide-react";
+import { Plus, Search, Wrench, Pencil, Trash2, Eye, LayoutGrid, List, AlertTriangle, Clock, CheckCircle2, Zap, Shield, Settings, User, Timer } from "lucide-react";
 import { toast } from "sonner";
-import { format, differenceInDays } from "date-fns";
+import { format, differenceInDays, isPast } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
@@ -39,6 +39,12 @@ const priorityStyles: Record<string, string> = {
   high: "bg-warning/15 text-warning",
   critical: "bg-destructive/15 text-destructive",
 };
+const priorityBorder: Record<string, string> = {
+  high: "border-l-4 border-l-destructive",
+  critical: "border-l-4 border-l-destructive",
+  medium: "border-l-4 border-l-warning",
+  low: "border-l-4 border-l-success",
+};
 const typeIcons: Record<string, any> = {
   corrective: Wrench, preventive: Shield, emergency: Zap, inspection: Search,
 };
@@ -46,7 +52,7 @@ const typeOptions = [
   { value: "corrective", label: "Corrective" }, { value: "preventive", label: "Preventive" },
   { value: "emergency", label: "Emergency" }, { value: "inspection", label: "Inspection" },
 ];
-const emptyForm = { title: "", type: "corrective", priority: "medium", description: "", due_date: "", status: "open" };
+const emptyForm = { title: "", type: "corrective", priority: "medium", description: "", due_date: "", status: "open", assigned_to: "", completion_notes: "", spare_parts: "", estimated_hours: "", actual_hours: "" };
 
 export default function WorkOrders() {
   const { user } = useAuth();
@@ -67,6 +73,13 @@ export default function WorkOrders() {
     queryFn: async () => { const { data } = await supabase.from("work_orders").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-list-wo"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+
+  const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));
+
   const save = useMutation({
     mutationFn: async () => {
       const result = workOrderSchema.safeParse(form);
@@ -78,12 +91,19 @@ export default function WorkOrders() {
       }
       setFormErrors({});
       const d = result.data as Record<string, any>;
+      const extra = {
+        assigned_to: form.assigned_to || null,
+        completion_notes: form.completion_notes || null,
+        spare_parts: form.spare_parts || null,
+        estimated_hours: form.estimated_hours ? Number(form.estimated_hours) : null,
+        actual_hours: form.actual_hours ? Number(form.actual_hours) : null,
+      };
       if (editingId) {
-        const { error } = await supabase.from("work_orders").update({ title: d.title, type: d.type, priority: d.priority, description: d.description, due_date: d.due_date || null, status: d.status }).eq("id", editingId);
+        const { error } = await supabase.from("work_orders").update({ title: d.title, type: d.type, priority: d.priority, description: d.description, due_date: d.due_date || null, status: d.status, ...extra }).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated work order", d.title as string, "work_orders");
       } else {
-        const insertData = { title: d.title as string, type: d.type as string, priority: d.priority as string, description: d.description as string, due_date: (d.due_date as string) || null, status: d.status as string, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id };
+        const insertData = { title: d.title as string, type: d.type as string, priority: d.priority as string, description: d.description as string, due_date: (d.due_date as string) || null, status: d.status as string, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id, ...extra };
         const { error } = await supabase.from("work_orders").insert(insertData);
         if (error) throw error;
         await logAudit("Created work order", d.title as string, "work_orders");
@@ -91,6 +111,21 @@ export default function WorkOrders() {
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success(editingId ? "Updated" : "Work order created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
     onError: (e: any) => { if (e.message !== "Validation failed") toast.error(e.message); },
+  });
+
+  const markComplete = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("work_orders").update({ status: "completed", completed_date: new Date().toISOString().split("T")[0] }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Marked work order complete", id, "work_orders");
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["work_orders"] });
+      toast.success("Marked as completed");
+      setViewOpen(false);
+      setViewing(null);
+    },
+    onError: (e: any) => toast.error(e.message),
   });
 
   const remove = useMutation({
@@ -106,7 +141,7 @@ export default function WorkOrders() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ title: r.title || "", type: r.type || "corrective", priority: r.priority || "medium", description: r.description || "", due_date: r.due_date || "", status: r.status || "open" });
+    setForm({ title: r.title || "", type: r.type || "corrective", priority: r.priority || "medium", description: r.description || "", due_date: r.due_date || "", status: r.status || "open", assigned_to: r.assigned_to || "", completion_notes: r.completion_notes || "", spare_parts: r.spare_parts || "", estimated_hours: r.estimated_hours ? String(r.estimated_hours) : "", actual_hours: r.actual_hours ? String(r.actual_hours) : "" });
     setFormErrors({});
     setOpen(true);
   };
@@ -145,10 +180,12 @@ export default function WorkOrders() {
   const getDueBadge = (r: any) => {
     if (!r.due_date || r.status === "completed" || r.status === "closed") return null;
     const days = differenceInDays(new Date(r.due_date), new Date());
-    if (days < 0) return <Badge variant="destructive" className="text-[10px] px-1.5">{Math.abs(days)}d overdue</Badge>;
+    if (days < 0) return <Badge variant="destructive" className="text-[10px] px-1.5">OVERDUE</Badge>;
     if (days <= 3) return <Badge className="text-[10px] px-1.5 bg-warning/15 text-warning border-0">{days}d left</Badge>;
     return null;
   };
+
+  const getAssigneeName = (id: string) => employees.find((e: any) => e.id === id)?.name || id;
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -233,8 +270,9 @@ export default function WorkOrders() {
               const st = statusStyles[r.status] || statusStyles.open;
               const StatusIcon = st.icon;
               const TypeIcon = typeIcons[r.type] || Wrench;
+              const borderClass = priorityBorder[r.priority] || "";
               return (
-                <Card key={r.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
+                <Card key={r.id} className={`group hover:shadow-md transition-all hover:-translate-y-0.5 ${borderClass}`}>
                   <CardContent className="p-4">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex items-center gap-2">
@@ -247,6 +285,7 @@ export default function WorkOrders() {
                       <Badge variant="secondary" className={`${st.bg} border-0 gap-1 text-[10px]`}><StatusIcon className="h-3 w-3" />{r.status?.replace("_", " ")}</Badge>
                     </div>
                     {r.description && <p className="text-xs text-muted-foreground line-clamp-2 mb-2">{r.description}</p>}
+                    {r.assigned_to && <p className="text-xs text-muted-foreground mb-2 flex items-center gap-1"><User className="h-3 w-3" />{getAssigneeName(r.assigned_to)}</p>}
                     <div className="flex items-center gap-2 text-xs">
                       <Badge variant="secondary" className={`${priorityStyles[r.priority] || ""} border-0 text-[10px]`}>{r.priority}</Badge>
                       <Badge variant="outline" className="text-[10px] capitalize">{r.type}</Badge>
@@ -279,13 +318,15 @@ export default function WorkOrders() {
             <SortableHeader label="Priority" sortKey="priority" direction={getSortDirection("priority")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Due" sortKey="due_date" direction={getSortDirection("due_date")} onToggle={toggleSort} />
+            <TableHead>Technician</TableHead>
             <TableHead>Actions</TableHead>
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => {
               const st = statusStyles[r.status] || statusStyles.open;
               const StatusIcon = st.icon;
+              const borderClass = priorityBorder[r.priority] || "";
               return (
-              <TableRow key={r.id} className={`group ${bulk.isSelected(r.id) ? "bg-primary/5" : ""}`}>
+              <TableRow key={r.id} className={`group ${bulk.isSelected(r.id) ? "bg-primary/5" : ""} ${borderClass}`}>
                 <TableCell><Checkbox checked={bulk.isSelected(r.id)} onCheckedChange={() => bulk.toggle(r.id)} /></TableCell>
                 <TableCell className="text-xs font-mono">{r.wo_no}</TableCell>
                 <TableCell className="font-medium">{r.title}</TableCell>
@@ -298,6 +339,7 @@ export default function WorkOrders() {
                     {getDueBadge(r)}
                   </div>
                 </TableCell>
+                <TableCell className="text-xs text-muted-foreground">{r.assigned_to ? getAssigneeName(r.assigned_to) : "—"}</TableCell>
                 <TableCell>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -314,7 +356,7 @@ export default function WorkOrders() {
       </CardContent></Card>
 
       {/* Create/Edit Dialog */}
-      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); setFormErrors({}); } }}><DialogContent>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); setFormErrors({}); } }}><DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editingId ? "Edit Work Order" : "New Work Order"}</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div><Label>Title *</Label><Input value={form.title} onChange={e => setForm({ ...form, title: e.target.value })} />{formErrors.title && <p className="text-xs text-destructive mt-1">{formErrors.title}</p>}</div>
@@ -323,8 +365,15 @@ export default function WorkOrders() {
             <div><Label>Priority</Label><Select value={form.priority} onValueChange={v => setForm({ ...form, priority: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="low">Low</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="high">High</SelectItem><SelectItem value="critical">Critical</SelectItem></SelectContent></Select></div>
           </div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="in_progress">In Progress</SelectItem><SelectItem value="completed">Completed</SelectItem><SelectItem value="closed">Closed</SelectItem></SelectContent></Select></div>}
+          <div><Label>Technician / Assigned To</Label><ComboboxSelect value={form.assigned_to} onValueChange={v => setForm({ ...form, assigned_to: v })} options={employeeOptions} placeholder="Select technician..." allowCustom={false} /></div>
           <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Estimated Hours</Label><Input type="number" min="0" value={form.estimated_hours} onChange={e => setForm({ ...form, estimated_hours: e.target.value })} placeholder="0" /></div>
+            <div><Label>Actual Hours</Label><Input type="number" min="0" value={form.actual_hours} onChange={e => setForm({ ...form, actual_hours: e.target.value })} placeholder="0" /></div>
+          </div>
+          <div><Label>Spare Parts Used</Label><Input value={form.spare_parts} onChange={e => setForm({ ...form, spare_parts: e.target.value })} placeholder="List parts used..." /></div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />{formErrors.description && <p className="text-xs text-destructive mt-1">{formErrors.description}</p>}</div>
+          <div><Label>Completion Notes</Label><Textarea value={form.completion_notes} onChange={e => setForm({ ...form, completion_notes: e.target.value })} placeholder="Notes on completion..." /></div>
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={!form.title || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create"}</Button>
         </div>
       </DialogContent></Dialog>
@@ -336,6 +385,10 @@ export default function WorkOrders() {
           const st = statusStyles[viewing.status] || statusStyles.open;
           const StatusIcon = st.icon;
           const TypeIcon = typeIcons[viewing.type] || Wrench;
+          const isOverdue = viewing.due_date && isPast(new Date(viewing.due_date)) && viewing.status !== "completed" && viewing.status !== "closed";
+          const canComplete = viewing.status !== "completed" && viewing.status !== "closed";
+          const estH = viewing.estimated_hours ? Number(viewing.estimated_hours) : 0;
+          const actH = viewing.actual_hours ? Number(viewing.actual_hours) : 0;
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3 pb-3 border-b">
@@ -349,11 +402,33 @@ export default function WorkOrders() {
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><p className="text-muted-foreground text-xs">Type</p><Badge variant="outline" className="capitalize mt-0.5">{viewing.type}</Badge></div>
                 <div><p className="text-muted-foreground text-xs">Priority</p><Badge variant="secondary" className={`${priorityStyles[viewing.priority] || ""} border-0 mt-0.5`}>{viewing.priority}</Badge></div>
-                <div><p className="text-muted-foreground text-xs">Due Date</p><p className="font-medium flex items-center gap-1.5">{viewing.due_date ? format(new Date(viewing.due_date), "dd MMM yyyy") : "—"}{getDueBadge(viewing)}</p></div>
+                <div><p className="text-muted-foreground text-xs">Due Date</p><p className="font-medium flex items-center gap-1.5">{viewing.due_date ? format(new Date(viewing.due_date), "dd MMM yyyy") : "—"}{isOverdue && <Badge variant="destructive" className="text-[10px] px-1.5">OVERDUE</Badge>}</p></div>
                 <div><p className="text-muted-foreground text-xs">Completed</p><p className="font-medium">{viewing.completed_date ? format(new Date(viewing.completed_date), "dd MMM yyyy") : "—"}</p></div>
+                {viewing.assigned_to && <div><p className="text-muted-foreground text-xs">Technician</p><p className="font-medium flex items-center gap-1"><User className="h-3.5 w-3.5" />{getAssigneeName(viewing.assigned_to)}</p></div>}
               </div>
+              {(estH > 0 || actH > 0) && (
+                <div className="p-3 rounded-lg bg-secondary/50 space-y-2">
+                  <p className="text-xs font-medium text-muted-foreground flex items-center gap-1"><Timer className="h-3.5 w-3.5" />Time Tracking</p>
+                  <div className="flex gap-4 text-sm">
+                    {estH > 0 && <div><span className="text-muted-foreground">Estimated:</span> <span className="font-medium">{estH}h</span></div>}
+                    {actH > 0 && <div><span className="text-muted-foreground">Actual:</span> <span className={`font-medium ${actH > estH ? "text-destructive" : ""}`}>{actH}h</span></div>}
+                  </div>
+                  {estH > 0 && <Progress value={Math.min(100, Math.round((actH / estH) * 100))} className="h-2" />}
+                </div>
+              )}
+              {viewing.spare_parts && (
+                <div><p className="text-muted-foreground text-xs mb-1">Spare Parts</p><p className="text-sm bg-muted p-2 rounded">{viewing.spare_parts}</p></div>
+              )}
               {viewing.description && (
                 <div><p className="text-muted-foreground text-xs mb-1">Description</p><p className="text-sm bg-muted p-3 rounded-md">{viewing.description}</p></div>
+              )}
+              {viewing.completion_notes && (
+                <div><p className="text-muted-foreground text-xs mb-1">Completion Notes</p><p className="text-sm bg-muted p-3 rounded-md">{viewing.completion_notes}</p></div>
+              )}
+              {canComplete && (
+                <Button className="w-full" onClick={() => markComplete.mutate(viewing.id)} disabled={markComplete.isPending}>
+                  <CheckCircle2 className="h-4 w-4 mr-2" />{markComplete.isPending ? "Completing..." : "Mark Complete"}
+                </Button>
               )}
             </div>
           );
