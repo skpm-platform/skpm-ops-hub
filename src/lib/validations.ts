@@ -2,7 +2,10 @@ import { z } from "zod";
 
 // Sanitize string - strip potential XSS
 const safeString = (maxLen = 255) =>
-  z.string().trim().max(maxLen).transform((val) => val.replace(/<[^>]*>/g, ""));
+  z.string().trim().max(maxLen).refine(
+    (val) => !/<script/i.test(val),
+    "Invalid characters detected"
+  );
 
 const safeOptionalString = (maxLen = 255) =>
   safeString(maxLen).optional().or(z.literal(""));
