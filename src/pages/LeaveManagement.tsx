@@ -13,8 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Plus, Search, Loader2, UserMinus, CheckCircle, XCircle, CalendarDays, Clock, TrendingUp, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Loader2, UserMinus, CheckCircle, XCircle, CalendarDays, Clock, TrendingUp, LayoutGrid, List, Eye, Ban } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -35,17 +34,40 @@ const leaveTypeColors: Record<string, string> = {
   compassionate: "bg-secondary text-secondary-foreground",
 };
 
+// Count weekdays (Mon–Fri) between two dates inclusive
+const countWeekdays = (startStr: string, endStr: string): number => {
+  const s = new Date(startStr);
+  const e = new Date(endStr);
+  if (isNaN(s.getTime()) || isNaN(e.getTime()) || s > e) return 1;
+  let count = 0;
+  const cur = new Date(s);
+  while (cur <= e) {
+    const day = cur.getDay();
+    if (day !== 0 && day !== 6) count++;
+    cur.setDate(cur.getDate() + 1);
+  }
+  return Math.max(1, count);
+};
+
 export default function LeaveManagement() {
   const { user } = useAuth();
   const { data: role } = useUserRole();
   const isManagerUp = role === "admin" || role === "manager";
+  const isAdmin = role === "admin";
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [open, setOpen] = useState(false);
+  const [viewItem, setViewItem] = useState<any>(null);
   const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const [form, setForm] = useState({ type: "annual", start_date: "", end_date: "", days: 1, reason: "" });
+
+  // Date range filter
+  const [filterFrom, setFilterFrom] = useState("");
+  const [filterTo, setFilterTo] = useState("");
+
+  const currentYear = new Date().getFullYear();
 
   const { data: leaves = [], isLoading } = useQuery({
     queryKey: ["leave_requests"],
@@ -73,24 +95,51 @@ export default function LeaveManagement() {
       const leave = leaves.find((l: any) => l.id === id);
       await logAudit(`Leave ${status}`, `${leave?.employees?.name ?? "Unknown"} — ${leave?.type} (${leave?.days} days)`, "leave");
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["leave_requests"] }); toast.success("Status updated"); setConfirmAction(null); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["leave_requests"] });
+      toast.success("Status updated");
+      setConfirmAction(null);
+      setViewItem((prev: any) => {
+        if (!prev) return prev;
+        const updated = leaves.find((l: any) => l.id === prev.id);
+        return updated ? { ...prev, status: confirmAction?.status } : prev;
+      });
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const cancelLeave = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("leave_requests").update({ status: "cancelled" }).eq("id", id);
+      if (error) throw error;
+      const leave = leaves.find((l: any) => l.id === id);
+      await logAudit("Leave cancelled", `${leave?.employees?.name ?? "Unknown"} — ${leave?.type} (${leave?.days} days)`, "leave");
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["leave_requests"] });
+      toast.success("Leave request cancelled");
+      setViewItem((prev: any) => prev?.id === id ? { ...prev, status: "cancelled" } : prev);
+    },
     onError: (e: any) => toast.error(e.message),
   });
 
   const statusColor = (s: string) => {
     if (s === "approved") return "bg-success/15 text-success border-0";
     if (s === "rejected") return "bg-destructive/15 text-destructive border-0";
+    if (s === "cancelled") return "bg-gray-100 text-gray-600 border-0 dark:bg-gray-800 dark:text-gray-400";
     return "bg-warning/15 text-warning border-0";
   };
 
   const statusCounts: Record<string, number> = {};
   leaves.forEach((l: any) => { statusCounts[l.status ?? "pending"] = (statusCounts[l.status ?? "pending"] || 0) + 1; });
-  const statuses = buildStatuses(statusCounts, ["pending", "approved", "rejected"]);
+  const statuses = buildStatuses(statusCounts, ["pending", "approved", "rejected", "cancelled"]);
 
   const filtered = leaves.filter((l: any) => {
     const matchSearch = l.type?.toLowerCase().includes(search.toLowerCase()) || l.reason?.toLowerCase().includes(search.toLowerCase()) || l.employees?.name?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || l.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchFrom = !filterFrom || (l.start_date && l.start_date >= filterFrom);
+    const matchTo = !filterTo || (l.end_date && l.end_date <= filterTo);
+    return matchSearch && matchStatus && matchFrom && matchTo;
   });
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
@@ -99,19 +148,33 @@ export default function LeaveManagement() {
   const rejectedCount = leaves.filter((l: any) => l.status === "rejected").length;
   const totalDays = leaves.filter((l: any) => l.status === "approved").reduce((s: number, l: any) => s + (l.days || 0), 0);
 
+  // Annual leave used this year
+  const annualUsedThisYear = leaves
+    .filter((l: any) => l.status === "approved" && l.type === "annual" && l.start_date?.startsWith(String(currentYear)))
+    .reduce((sum: number, l: any) => sum + (l.days || 0), 0);
+  const annualAllowance = 30;
+  const annualProgress = Math.min(100, Math.round((annualUsedThisYear / annualAllowance) * 100));
+
   // Leave type breakdown
   const typeCounts: Record<string, number> = {};
   leaves.filter((l: any) => l.status === "approved").forEach((l: any) => { typeCounts[l.type || "other"] = (typeCounts[l.type || "other"] || 0) + (l.days || 0); });
   const typeBreakdown = Object.entries(typeCounts).sort(([, a], [, b]) => b - a);
 
-  // Auto-calculate days when dates change
+  // Auto-calculate days (weekdays) when dates change
   const handleDateChange = (field: "start_date" | "end_date", value: string) => {
     const newForm = { ...form, [field]: value };
     if (newForm.start_date && newForm.end_date) {
-      const diff = differenceInDays(new Date(newForm.end_date), new Date(newForm.start_date)) + 1;
-      if (diff > 0) newForm.days = diff;
+      const weekdays = countWeekdays(newForm.start_date, newForm.end_date);
+      newForm.days = weekdays;
     }
     setForm(newForm);
+  };
+
+  // Per-employee annual leave for view dialog
+  const getEmployeeAnnualUsed = (employeeId: string) => {
+    return leaves
+      .filter((l: any) => l.employee_id === employeeId && l.status === "approved" && l.type === "annual" && l.start_date?.startsWith(String(currentYear)))
+      .reduce((sum: number, l: any) => sum + (l.days || 0), 0);
   };
 
   return (
@@ -135,6 +198,9 @@ export default function LeaveManagement() {
                   <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => handleDateChange("start_date", e.target.value)} /></div>
                   <div className="space-y-2"><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => handleDateChange("end_date", e.target.value)} /></div>
                 </div>
+                {form.start_date && form.end_date && (
+                  <p className="text-xs text-muted-foreground">📅 {form.days} working day{form.days !== 1 ? "s" : ""} (weekends excluded)</p>
+                )}
                 <div className="space-y-2"><Label>Days</Label><Input type="number" min={1} value={form.days} onChange={e => setForm(f => ({ ...f, days: Number(e.target.value) }))} /></div>
                 <div className="space-y-2"><Label>Reason</Label><Textarea placeholder="Reason for leave..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
                 <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>
@@ -147,7 +213,7 @@ export default function LeaveManagement() {
       </div>
 
       {/* Enhanced KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-6 gap-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
             <div className="flex items-center justify-between">
@@ -210,6 +276,15 @@ export default function LeaveManagement() {
             )}
           </CardContent>
         </Card>
+        {/* Annual Leave Balance */}
+        <Card className="hover:shadow-md transition-shadow col-span-2 lg:col-span-1">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Annual Leave {currentYear}</p>
+            <p className="text-2xl font-bold mt-1">{annualUsedThisYear}<span className="text-sm text-muted-foreground font-normal">/{annualAllowance}d</span></p>
+            <Progress value={annualProgress} className="mt-2 h-1.5" />
+            <p className="text-[10px] text-muted-foreground mt-1">{Math.max(0, annualAllowance - annualUsedThisYear)}d remaining typical allowance</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Pending Approvals Banner for Managers */}
@@ -227,6 +302,24 @@ export default function LeaveManagement() {
         </Card>
       )}
 
+      {/* Date Range Filter */}
+      <Card><CardContent className="p-4">
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="text-sm font-medium text-muted-foreground">Filter by period:</span>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">From</Label>
+            <Input type="date" value={filterFrom} onChange={e => setFilterFrom(e.target.value)} className="h-8 w-36 text-xs" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Label className="text-xs">To</Label>
+            <Input type="date" value={filterTo} onChange={e => setFilterTo(e.target.value)} className="h-8 w-36 text-xs" />
+          </div>
+          {(filterFrom || filterTo) && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => { setFilterFrom(""); setFilterTo(""); }}>Clear</Button>
+          )}
+        </div>
+      </CardContent></Card>
+
       <div className="flex flex-col sm:flex-row gap-3">
         <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
         <div className="flex items-center gap-2 ml-auto">
@@ -243,7 +336,6 @@ export default function LeaveManagement() {
       ) : filtered.length === 0 ? (
         <Card><CardContent className="py-8 text-center text-muted-foreground">No leave requests found</CardContent></Card>
       ) : viewMode === "cards" ? (
-        /* Card View */
         <>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           {pageData.map((l: any) => (
@@ -270,12 +362,15 @@ export default function LeaveManagement() {
                   <span className="text-muted-foreground">{l.days} day{l.days !== 1 ? "s" : ""}</span>
                   {l.reason && <span className="text-muted-foreground truncate max-w-[120px]">{l.reason}</span>}
                 </div>
-                {l.status === "pending" && isManagerUp && (
-                  <div className="flex gap-1.5 mt-3 pt-3 border-t">
-                    <Button size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 flex-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
-                  </div>
-                )}
+                <div className="flex gap-1.5 mt-3 pt-3 border-t">
+                  <Button size="sm" variant="ghost" className="h-7 text-xs gap-1 flex-1" onClick={() => setViewItem(l)}><Eye className="h-3 w-3" /> View</Button>
+                  {l.status === "pending" && isManagerUp && (
+                    <>
+                      <Button size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
+                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1 flex-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
           ))}
@@ -283,7 +378,6 @@ export default function LeaveManagement() {
         <div className="mt-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
         </>
       ) : (
-        /* Table View */
         <div className="rounded-lg border bg-card">
           <Table>
             <TableHeader><TableRow>
@@ -293,7 +387,7 @@ export default function LeaveManagement() {
               <SortableHeader label="To" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
               <SortableHeader label="Days" sortKey="days" direction={getSortDirection("days")} onToggle={toggleSort} />
               <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-              <TableHead className="w-32">Actions</TableHead>
+              <TableHead className="w-40">Actions</TableHead>
             </TableRow></TableHeader>
             <TableBody>
               {pageData.map((l: any) => (
@@ -305,14 +399,17 @@ export default function LeaveManagement() {
                   <TableCell className="font-medium">{l.days}</TableCell>
                   <TableCell><Badge variant="secondary" className={statusColor(l.status)}>{l.status}</Badge></TableCell>
                   <TableCell>
-                    {l.status === "pending" && isManagerUp ? (
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
-                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
-                      </div>
-                    ) : l.status === "pending" ? (
-                      <span className="text-xs text-muted-foreground">Awaiting approval</span>
-                    ) : null}
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewItem(l)}><Eye className="h-3.5 w-3.5" /></Button>
+                      {l.status === "pending" && isManagerUp ? (
+                        <>
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
+                          <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
+                        </>
+                      ) : l.status === "pending" ? (
+                        <span className="text-xs text-muted-foreground">Awaiting approval</span>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -321,6 +418,60 @@ export default function LeaveManagement() {
           <div className="p-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
         </div>
       )}
+
+      {/* View Dialog */}
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader><DialogTitle>Leave Request Details</DialogTitle></DialogHeader>
+          {viewItem && (() => {
+            const empAnnualUsed = getEmployeeAnnualUsed(viewItem.employee_id);
+            const remaining = annualAllowance - empAnnualUsed;
+            return (
+              <div className="space-y-4 text-sm">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <p className="font-semibold text-base">{viewItem.employees?.name ?? "Unknown"}</p>
+                    <Badge variant="secondary" className={`mt-1 capitalize text-xs border-0 ${leaveTypeColors[viewItem.type] || ""}`}>{viewItem.type}</Badge>
+                  </div>
+                  <Badge variant="secondary" className={`${statusColor(viewItem.status)} text-xs`}>{viewItem.status}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div><p className="text-muted-foreground text-xs">From</p><p className="font-medium">{viewItem.start_date ? format(new Date(viewItem.start_date), "dd MMM yyyy") : "—"}</p></div>
+                  <div><p className="text-muted-foreground text-xs">To</p><p className="font-medium">{viewItem.end_date ? format(new Date(viewItem.end_date), "dd MMM yyyy") : "—"}</p></div>
+                  <div><p className="text-muted-foreground text-xs">Duration</p><p className="font-medium">{viewItem.days} day{viewItem.days !== 1 ? "s" : ""}</p></div>
+                  {viewItem.type === "annual" && (
+                    <div>
+                      <p className="text-muted-foreground text-xs">Annual Leave Balance ({currentYear})</p>
+                      <p className="font-medium">{empAnnualUsed}/{annualAllowance}d used</p>
+                      <p className={`text-xs ${remaining < 0 ? "text-red-600" : remaining <= 5 ? "text-amber-600" : "text-emerald-600"}`}>{remaining} days remaining</p>
+                    </div>
+                  )}
+                </div>
+                {viewItem.reason && (
+                  <div><p className="text-muted-foreground text-xs mb-1">Reason</p><p className="bg-muted/50 rounded-md p-3">{viewItem.reason}</p></div>
+                )}
+                <div className="flex gap-2 pt-2">
+                  {viewItem.status === "pending" && isManagerUp && (
+                    <>
+                      <Button size="sm" className="flex-1 h-8 gap-1" onClick={() => { setConfirmAction({ id: viewItem.id, status: "approved" }); }}>
+                        <CheckCircle className="h-3.5 w-3.5" /> Approve
+                      </Button>
+                      <Button size="sm" variant="outline" className="flex-1 h-8 gap-1 text-destructive" onClick={() => { setConfirmAction({ id: viewItem.id, status: "rejected" }); }}>
+                        <XCircle className="h-3.5 w-3.5" /> Reject
+                      </Button>
+                    </>
+                  )}
+                  {viewItem.status === "approved" && isAdmin && (
+                    <Button size="sm" variant="outline" className="flex-1 h-8 gap-1 text-destructive border-destructive/30" onClick={() => cancelLeave.mutate(viewItem.id)} disabled={cancelLeave.isPending}>
+                      <Ban className="h-3.5 w-3.5" />{cancelLeave.isPending ? "Cancelling..." : "Cancel Leave"}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <ConfirmDialog
         open={!!confirmAction}

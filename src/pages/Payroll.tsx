@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useUserRole } from "@/hooks/use-profile";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight, Printer, CheckCircle } from "lucide-react";
+import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight, Printer, CheckCircle, ChevronLeft, ChevronRight, Download, Zap } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -21,9 +22,14 @@ import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusFilter } from "@/components/StatusFilter";
 
 const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+const currentYear = new Date().getFullYear();
+const yearOptions = [currentYear - 1, currentYear, currentYear + 1];
 
 export default function Payroll() {
   const qc = useQueryClient();
+  const { data: role } = useUserRole();
+  const isAdmin = role === "admin";
+
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"table" | "cards">("table");
@@ -31,25 +37,58 @@ export default function Payroll() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "", overtime_pay: "", deductions: "", status: "draft" });
+
+  // Year / Month filter
+  const [filterYear, setFilterYear] = useState(String(currentYear));
+  const [filterMonth, setFilterMonth] = useState("all");
+
+  // Generate for All dialog
+  const [genOpen, setGenOpen] = useState(false);
+  const [genMonth, setGenMonth] = useState(String(new Date().getMonth() + 1));
+  const [genYear, setGenYear] = useState(String(currentYear));
+
+  const [form, setForm] = useState({
+    employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()),
+    basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "",
+    overtime_pay: "", deductions: "", status: "draft", payable_days: "30",
+  });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["payroll"],
     queryFn: async () => { const { data } = await (supabase as any).from("payroll").select("*, employees(name)").order("created_at", { ascending: false }); return data || []; },
   });
-  const { data: employees = [] } = useQuery({ queryKey: ["emp-pay"], queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id,name"); return data || []; } });
+  const { data: employees = [] } = useQuery({
+    queryKey: ["emp-pay"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id,name,basic_salary"); return data || []; },
+  });
 
-  const resetForm = () => setForm({ employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()), basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "", overtime_pay: "", deductions: "", status: "draft" });
+  const resetForm = () => setForm({
+    employee_id: "", month: String(new Date().getMonth() + 1), year: String(new Date().getFullYear()),
+    basic_salary: "", housing_allowance: "", transport_allowance: "", food_allowance: "",
+    overtime_pay: "", deductions: "", status: "draft", payable_days: "30",
+  });
 
   const calcNet = (f: typeof form) => {
-    const b = parseFloat(f.basic_salary) || 0, h = parseFloat(f.housing_allowance) || 0, t = parseFloat(f.transport_allowance) || 0, fo = parseFloat(f.food_allowance) || 0, ot = parseFloat(f.overtime_pay) || 0, d = parseFloat(f.deductions) || 0;
-    return b + h + t + fo + ot - d;
+    const b = parseFloat(f.basic_salary) || 0;
+    const h = parseFloat(f.housing_allowance) || 0;
+    const t = parseFloat(f.transport_allowance) || 0;
+    const fo = parseFloat(f.food_allowance) || 0;
+    const ot = parseFloat(f.overtime_pay) || 0;
+    const d = parseFloat(f.deductions) || 0;
+    const pd = parseInt(f.payable_days) || 30;
+    return (b / 30 * pd) + h + t + fo + ot - d;
   };
   const calcAllowances = (f: typeof form) => (parseFloat(f.housing_allowance) || 0) + (parseFloat(f.transport_allowance) || 0) + (parseFloat(f.food_allowance) || 0);
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { employee_id: form.employee_id || null, month: parseInt(form.month), year: parseInt(form.year), basic_salary: parseFloat(form.basic_salary) || 0, housing_allowance: parseFloat(form.housing_allowance) || 0, transport_allowance: parseFloat(form.transport_allowance) || 0, food_allowance: parseFloat(form.food_allowance) || 0, overtime_pay: parseFloat(form.overtime_pay) || 0, deductions: parseFloat(form.deductions) || 0, net_pay: calcNet(form), status: form.status };
+      const payload = {
+        employee_id: form.employee_id || null, month: parseInt(form.month), year: parseInt(form.year),
+        basic_salary: parseFloat(form.basic_salary) || 0, housing_allowance: parseFloat(form.housing_allowance) || 0,
+        transport_allowance: parseFloat(form.transport_allowance) || 0, food_allowance: parseFloat(form.food_allowance) || 0,
+        overtime_pay: parseFloat(form.overtime_pay) || 0, deductions: parseFloat(form.deductions) || 0,
+        net_pay: calcNet(form), status: form.status, payable_days: parseInt(form.payable_days) || 30,
+      };
       if (editingId) {
         const { error } = await (supabase as any).from("payroll").update(payload).eq("id", editingId);
         if (error) throw error;
@@ -80,9 +119,73 @@ export default function Payroll() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  // Batch Generate Payroll for All Employees
+  const generateAll = useMutation({
+    mutationFn: async () => {
+      const mon = parseInt(genMonth);
+      const yr = parseInt(genYear);
+      toast.loading("Fetching employees...");
+      const { data: emps, error: empErr } = await (supabase as any).from("employees").select("id,name,basic_salary");
+      if (empErr) throw empErr;
+      const { data: existing, error: exErr } = await (supabase as any).from("payroll").select("employee_id").eq("month", mon).eq("year", yr);
+      if (exErr) throw exErr;
+      const existingIds = new Set((existing || []).map((r: any) => r.employee_id));
+      const toInsert = (emps || []).filter((e: any) => !existingIds.has(e.id));
+      if (toInsert.length === 0) {
+        toast.dismiss();
+        toast.info("All employees already have payroll records for this period.");
+        return 0;
+      }
+      const records = toInsert.map((e: any) => ({
+        employee_id: e.id, month: mon, year: yr,
+        basic_salary: e.basic_salary || 0, housing_allowance: 0, transport_allowance: 0,
+        food_allowance: 0, overtime_pay: 0, deductions: 0,
+        net_pay: e.basic_salary || 0, payable_days: 30, status: "draft",
+      }));
+      const { error } = await (supabase as any).from("payroll").insert(records);
+      if (error) throw error;
+      return records.length;
+    },
+    onSuccess: (count) => {
+      toast.dismiss();
+      if (count && count > 0) {
+        qc.invalidateQueries({ queryKey: ["payroll"] });
+        toast.success(`Generated ${count} payroll record${count !== 1 ? "s" : ""} for ${months[parseInt(genMonth) - 1]} ${genYear}`);
+        setGenOpen(false);
+      }
+    },
+    onError: (e: any) => { toast.dismiss(); toast.error(e.message); },
+  });
+
+  // WPS CSV Export
+  const wpsExport = () => {
+    const rows = filtered.map((r: any) => [
+      r.employee_id || "",
+      r.employees?.name || "",
+      "N/A",
+      "N/A",
+      r.net_pay || 0,
+      `${months[(r.month || 1) - 1]} ${r.year}`,
+    ]);
+    const header = ["Employee ID", "Employee Name", "Bank Account", "IBAN", "Net Pay", "Month"];
+    const csv = [header, ...rows].map(row => row.map(v => `"${v}"`).join(",")).join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `wps-export-${months[parseInt(filterMonth) - 1] || "all"}-${filterYear}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("WPS CSV exported");
+  };
+
   const printPayslip = (r: any) => {
     const month = months[(r.month || 1) - 1];
     const gross = (r.basic_salary || 0) + (r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0) + (r.overtime_pay || 0);
+    const payableDays = r.payable_days || 30;
+    const basicPayable = ((r.basic_salary || 0) / 30) * payableDays;
     const html = `<!DOCTYPE html><html><head><title>Payslip - ${r.employees?.name || ""} ${month} ${r.year}</title>
     <style>
       body { font-family: Arial, sans-serif; max-width: 600px; margin: 40px auto; color: #111; }
@@ -101,7 +204,7 @@ export default function Payroll() {
       <div class="badge status-${r.status}">${r.status?.toUpperCase()}</div></div>
     </div>
     <table>
-      <tr><td>Basic Salary</td><td>AED ${(r.basic_salary || 0).toLocaleString()}</td></tr>
+      <tr><td>Basic Salary (${payableDays}/30 days)</td><td>AED ${basicPayable.toLocaleString(undefined, {maximumFractionDigits: 2})}</td></tr>
       <tr><td>Housing Allowance</td><td style="color:green">AED ${(r.housing_allowance || 0).toLocaleString()}</td></tr>
       <tr><td>Transport Allowance</td><td style="color:green">AED ${(r.transport_allowance || 0).toLocaleString()}</td></tr>
       <tr><td>Food Allowance</td><td style="color:green">AED ${(r.food_allowance || 0).toLocaleString()}</td></tr>
@@ -119,8 +222,28 @@ export default function Payroll() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ employee_id: r.employee_id || "", month: String(r.month), year: String(r.year), basic_salary: String(r.basic_salary || ""), housing_allowance: String(r.housing_allowance || ""), transport_allowance: String(r.transport_allowance || ""), food_allowance: String(r.food_allowance || ""), overtime_pay: String(r.overtime_pay || ""), deductions: String(r.deductions || ""), status: r.status || "draft" });
+    setForm({
+      employee_id: r.employee_id || "", month: String(r.month), year: String(r.year),
+      basic_salary: String(r.basic_salary || ""), housing_allowance: String(r.housing_allowance || ""),
+      transport_allowance: String(r.transport_allowance || ""), food_allowance: String(r.food_allowance || ""),
+      overtime_pay: String(r.overtime_pay || ""), deductions: String(r.deductions || ""),
+      status: r.status || "draft", payable_days: String(r.payable_days || 30),
+    });
     setOpen(true);
+  };
+
+  // Month navigation
+  const handlePrevMonth = () => {
+    const m = filterMonth === "all" ? new Date().getMonth() + 1 : parseInt(filterMonth);
+    const y = parseInt(filterYear) || currentYear;
+    if (m === 1) { setFilterMonth("12"); setFilterYear(String(y - 1)); }
+    else { setFilterMonth(String(m - 1)); }
+  };
+  const handleNextMonth = () => {
+    const m = filterMonth === "all" ? new Date().getMonth() + 1 : parseInt(filterMonth);
+    const y = parseInt(filterYear) || currentYear;
+    if (m === 12) { setFilterMonth("1"); setFilterYear(String(y + 1)); }
+    else { setFilterMonth(String(m + 1)); }
   };
 
   const totalNet = data.reduce((s: number, r: any) => s + (r.net_pay || 0), 0);
@@ -133,17 +256,32 @@ export default function Payroll() {
 
   const filtered = data
     .filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()))
-    .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
+    .filter((r: any) => statusFilter === "all" || r.status === statusFilter)
+    .filter((r: any) => filterYear === "all" || String(r.year) === filterYear)
+    .filter((r: any) => filterMonth === "all" || String(r.month) === filterMonth);
+
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+
+  const currentPeriodLabel = filterMonth !== "all"
+    ? `${months[parseInt(filterMonth) - 1]} ${filterYear}`
+    : filterYear !== "all" ? filterYear : "All Periods";
 
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Wallet className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Payroll</h1><p className="text-sm text-muted-foreground">{data.length} records</p></div></div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <ExportButton data={data} filename="payroll" />
+          {isAdmin && (
+            <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={() => setGenOpen(true)}>
+              <Zap className="h-4 w-4" />Generate for All
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="h-9 gap-1.5" onClick={wpsExport}>
+            <Download className="h-4 w-4" />WPS Export
+          </Button>
           <Button size="sm" className="h-9" onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Payroll</Button>
         </div>
       </div>
@@ -201,8 +339,32 @@ export default function Payroll() {
         </Card>
       </div>
 
-      <div className="flex flex-col sm:flex-row gap-3">
+      {/* Filters Bar */}
+      <div className="flex flex-col sm:flex-row gap-3 flex-wrap">
         <StatusFilter statuses={[{ value: "all", label: "All", count: data.length }, { value: "draft", label: "Draft", count: statusCounts.draft || 0 }, { value: "processed", label: "Processed", count: statusCounts.processed || 0 }, { value: "paid", label: "Paid", count: statusCounts.paid || 0 }]} selected={statusFilter} onSelect={setStatusFilter} />
+
+        {/* Year Filter */}
+        <Select value={filterYear} onValueChange={setFilterYear}>
+          <SelectTrigger className="h-9 w-32"><SelectValue placeholder="Year" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Years</SelectItem>
+            {yearOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}
+          </SelectContent>
+        </Select>
+
+        {/* Month Navigation */}
+        <div className="flex items-center gap-1 border rounded-md h-9 px-1">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handlePrevMonth}><ChevronLeft className="h-4 w-4" /></Button>
+          <Select value={filterMonth} onValueChange={setFilterMonth}>
+            <SelectTrigger className="h-7 border-0 shadow-none w-28 text-xs"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Months</SelectItem>
+              {months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={handleNextMonth}><ChevronRight className="h-4 w-4" /></Button>
+        </div>
+
         <div className="flex items-center gap-2 ml-auto">
           <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 w-64" /></div>
           <div className="flex border rounded-md">
@@ -211,6 +373,11 @@ export default function Payroll() {
           </div>
         </div>
       </div>
+
+      {/* Period label */}
+      {(filterMonth !== "all" || filterYear !== "all") && (
+        <p className="text-sm text-muted-foreground">Showing: <span className="font-medium text-foreground">{currentPeriodLabel}</span> · {filtered.length} record{filtered.length !== 1 ? "s" : ""}</p>
+      )}
 
       {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <Card><CardContent className="py-8 text-center text-muted-foreground">No payroll records</CardContent></Card> : viewMode === "cards" ? (
         <>
@@ -265,6 +432,7 @@ export default function Payroll() {
             <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
             <SortableHeader label="Period" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
             <SortableHeader label="Basic" sortKey="basic_salary" direction={getSortDirection("basic_salary")} onToggle={toggleSort} />
+            <SortableHeader label="Payable Days" sortKey="payable_days" direction={getSortDirection("payable_days")} onToggle={toggleSort} />
             <SortableHeader label="Allowances" sortKey="housing_allowance" direction={getSortDirection("housing_allowance")} onToggle={toggleSort} />
             <SortableHeader label="Overtime" sortKey="overtime_pay" direction={getSortDirection("overtime_pay")} onToggle={toggleSort} />
             <SortableHeader label="Deductions" sortKey="deductions" direction={getSortDirection("deductions")} onToggle={toggleSort} />
@@ -284,6 +452,7 @@ export default function Payroll() {
                 </TableCell>
                 <TableCell>{months[(r.month || 1) - 1]} {r.year}</TableCell>
                 <TableCell>{r.basic_salary?.toLocaleString()}</TableCell>
+                <TableCell>{r.payable_days || 30}/30</TableCell>
                 <TableCell className="text-success">{((r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0)).toLocaleString()}</TableCell>
                 <TableCell className="text-success">{r.overtime_pay?.toLocaleString() || 0}</TableCell>
                 <TableCell className="text-destructive">{r.deductions?.toLocaleString()}</TableCell>
@@ -303,7 +472,7 @@ export default function Payroll() {
       )}
 
       {/* Add/Edit Dialog */}
-      <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg">
+      <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Payroll Record</DialogTitle></DialogHeader>
         <div className="space-y-4">
           <div><Label>Employee</Label><Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
@@ -312,7 +481,10 @@ export default function Payroll() {
             <div><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({ ...form, year: e.target.value })} /></div>
             <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="processed">Processed</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent></Select></div>
           </div>
-          <div><Label>Basic Salary</Label><Input type="number" value={form.basic_salary} onChange={e => setForm({ ...form, basic_salary: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Basic Salary</Label><Input type="number" value={form.basic_salary} onChange={e => setForm({ ...form, basic_salary: e.target.value })} /></div>
+            <div><Label>Payable Days (default 30)</Label><Input type="number" min="0" max="31" value={form.payable_days} onChange={e => setForm({ ...form, payable_days: e.target.value })} /></div>
+          </div>
           <div className="grid grid-cols-3 gap-2">
             <div><Label>Housing</Label><Input type="number" value={form.housing_allowance} onChange={e => setForm({ ...form, housing_allowance: e.target.value })} /></div>
             <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e => setForm({ ...form, transport_allowance: e.target.value })} /></div>
@@ -323,14 +495,42 @@ export default function Payroll() {
             <div><Label>Deductions</Label><Input type="number" value={form.deductions} onChange={e => setForm({ ...form, deductions: e.target.value })} /></div>
           </div>
           <div className="p-3 bg-muted rounded-lg space-y-1.5 text-sm">
-            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Basic</span><span>{(parseFloat(form.basic_salary) || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Basic ({form.payable_days || 30}/30 days)</span><span>{((parseFloat(form.basic_salary) || 0) / 30 * (parseInt(form.payable_days) || 30)).toLocaleString(undefined, {maximumFractionDigits: 2})}</span></div>
             <div className="flex justify-between text-xs text-success"><span>+ Allowances</span><span>{calcAllowances(form).toLocaleString()}</span></div>
             <div className="flex justify-between text-xs text-success"><span>+ Overtime</span><span>{(parseFloat(form.overtime_pay) || 0).toLocaleString()}</span></div>
             <div className="flex justify-between text-xs text-destructive"><span>- Deductions</span><span>{(parseFloat(form.deductions) || 0).toLocaleString()}</span></div>
             <Separator />
-            <div className="flex justify-between font-bold"><span>Net Pay</span><span>AED {calcNet(form).toLocaleString()}</span></div>
+            <div className="flex justify-between font-bold"><span>Net Pay</span><span>AED {calcNet(form).toLocaleString(undefined, {maximumFractionDigits: 2})}</span></div>
           </div>
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
+        </div>
+      </DialogContent></Dialog>
+
+      {/* Generate for All Dialog */}
+      <Dialog open={genOpen} onOpenChange={setGenOpen}><DialogContent className="max-w-sm">
+        <DialogHeader><DialogTitle>Generate Payroll for All Employees</DialogTitle></DialogHeader>
+        <div className="space-y-4">
+          <p className="text-sm text-muted-foreground">Creates draft payroll records for all employees for the selected period. Employees with existing records for that month/year will be skipped.</p>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Month</Label>
+              <Select value={genMonth} onValueChange={setGenMonth}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div><Label>Year</Label>
+              <Select value={genYear} onValueChange={setGenYear}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>{yearOptions.map(y => <SelectItem key={y} value={String(y)}>{y}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" className="flex-1" onClick={() => setGenOpen(false)}>Cancel</Button>
+            <Button className="flex-1" onClick={() => generateAll.mutate()} disabled={generateAll.isPending}>
+              {generateAll.isPending ? "Generating..." : `Generate for ${months[parseInt(genMonth) - 1]} ${genYear}`}
+            </Button>
+          </div>
         </div>
       </DialogContent></Dialog>
 
@@ -351,6 +551,7 @@ export default function Payroll() {
             </div>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between"><span className="text-muted-foreground">Basic Salary</span><span>AED {viewItem.basic_salary?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Payable Days</span><span>{viewItem.payable_days || 30}/30</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Housing Allowance</span><span className="text-success">AED {viewItem.housing_allowance?.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Transport Allowance</span><span className="text-success">AED {viewItem.transport_allowance?.toLocaleString()}</span></div>
               <div className="flex justify-between"><span className="text-muted-foreground">Food Allowance</span><span className="text-success">AED {viewItem.food_allowance?.toLocaleString()}</span></div>

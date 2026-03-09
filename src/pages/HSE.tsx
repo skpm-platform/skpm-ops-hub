@@ -13,7 +13,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Shield, Pencil, Trash2, Eye, AlertTriangle, Flame, Droplets, HardHat, LayoutGrid, List, TrendingDown, CheckCircle2 } from "lucide-react";
+import { Plus, Search, Shield, Pencil, Trash2, Eye, AlertTriangle, Flame, Droplets, HardHat, LayoutGrid, List, TrendingDown, CheckCircle2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -48,7 +48,24 @@ const statusColors: Record<string, string> = {
   closed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
 };
 
-const emptyForm = { type: "near_miss", description: "", injured_person: "", action_taken: "", date: "", status: "open" };
+// Severity row background tints
+const severityRowClass: Record<string, string> = {
+  critical: "bg-red-50/70 dark:bg-red-950/20",
+  high: "bg-orange-50/70 dark:bg-orange-950/20",
+  medium: "bg-amber-50/50 dark:bg-amber-950/10",
+  low: "bg-green-50/40 dark:bg-green-950/10",
+};
+
+const investigationStatusColors: Record<string, string> = {
+  "Pending": "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  "In Progress": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  "Completed": "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+};
+
+const emptyForm = {
+  type: "near_miss", description: "", injured_person: "", action_taken: "", date: "", status: "open",
+  severity: "medium", corrective_actions: "", root_cause: "", investigation_status: "Pending", is_near_miss: false as boolean,
+};
 
 export default function HSE() {
   const { user } = useAuth();
@@ -61,21 +78,21 @@ export default function HSE() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<any>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [form, setForm] = useState<typeof emptyForm>(emptyForm);
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["hse"],
-    queryFn: async () => { const { data } = await supabase.from("hse_incidents").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await (supabase as any).from("hse_incidents").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
   const save = useMutation({
     mutationFn: async () => {
       if (editingId) {
-        const { error } = await supabase.from("hse_incidents").update(form).eq("id", editingId);
+        const { error } = await (supabase as any).from("hse_incidents").update(form).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated HSE incident", form.type);
       } else {
-        const { error } = await supabase.from("hse_incidents").insert({ ...form, reported_by: user?.id });
+        const { error } = await (supabase as any).from("hse_incidents").insert({ ...form, reported_by: user?.id });
         if (error) throw error;
         await logAudit("Reported HSE incident", form.type);
       }
@@ -86,7 +103,7 @@ export default function HSE() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("hse_incidents").delete().eq("id", id);
+      const { error } = await (supabase as any).from("hse_incidents").delete().eq("id", id);
       if (error) throw error;
       await logAudit("Deleted HSE incident", id);
     },
@@ -94,9 +111,30 @@ export default function HSE() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const closeIncident = useMutation({
+    mutationFn: async (id: string) => {
+      const today = new Date().toISOString().split("T")[0];
+      const { error } = await (supabase as any).from("hse_incidents").update({ status: "closed", closed_date: today }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Closed HSE incident", id);
+    },
+    onSuccess: (_, id) => {
+      qc.invalidateQueries({ queryKey: ["hse"] });
+      toast.success("Incident closed");
+      setViewing((prev: any) => prev?.id === id ? { ...prev, status: "closed", closed_date: new Date().toISOString().split("T")[0] } : prev);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ type: r.type || "near_miss", description: r.description || "", injured_person: r.injured_person || "", action_taken: r.action_taken || "", date: r.date || "", status: r.status || "open" });
+    setForm({
+      type: r.type || "near_miss", description: r.description || "", injured_person: r.injured_person || "",
+      action_taken: r.action_taken || "", date: r.date || "", status: r.status || "open",
+      severity: r.severity || "medium", corrective_actions: r.corrective_actions || "",
+      root_cause: r.root_cause || "", investigation_status: r.investigation_status || "Pending",
+      is_near_miss: r.is_near_miss || false,
+    });
     setOpen(true);
   };
 
@@ -112,7 +150,6 @@ export default function HSE() {
   const investigatingCount = data.filter((r: any) => r.status === "investigating").length;
   const closureRate = data.length > 0 ? Math.round((closedCount / data.length) * 100) : 0;
 
-  // Days since last incident
   const sortedByDate = [...data].filter((r: any) => r.date).sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
   const daysSinceLast = sortedByDate.length > 0 ? differenceInDays(new Date(), parseISO(sortedByDate[0].date)) : null;
 
@@ -128,6 +165,13 @@ export default function HSE() {
   const TypeIcon = ({ type }: { type: string }) => {
     const Icon = typeIcons[type] || AlertTriangle;
     return <Icon className="h-4 w-4" />;
+  };
+
+  const getDaysOpen = (r: any) => {
+    if (r.status !== "open") return null;
+    const dateStr = r.incident_date || r.date;
+    if (!dateStr) return null;
+    try { return differenceInDays(new Date(), parseISO(dateStr)); } catch { return null; }
   };
 
   return (
@@ -206,30 +250,37 @@ export default function HSE() {
 
         {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No incidents found</p> : viewMode === "grid" ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {pageData.map((r: any) => (
-              <Card key={r.id} className="hover:shadow-md transition-all group cursor-pointer" onClick={() => { setViewing(r); setViewOpen(true); }}>
-                <CardContent className="p-4 space-y-3">
-                  <div className="flex items-start justify-between">
-                    <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${typeColors[r.type] || "bg-muted"}`}>
-                      <TypeIcon type={r.type} />
+            {pageData.map((r: any) => {
+              const daysOpen = getDaysOpen(r);
+              return (
+                <Card key={r.id} className={`hover:shadow-md transition-all group cursor-pointer ${severityRowClass[r.severity] || ""}`} onClick={() => { setViewing(r); setViewOpen(true); }}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${typeColors[r.type] || "bg-muted"}`}>
+                        <TypeIcon type={r.type} />
+                      </div>
+                      <div className="flex flex-col items-end gap-1">
+                        <Badge className={`text-xs ${statusColors[r.status] || ""}`}>{r.status}</Badge>
+                        {r.is_near_miss && <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">Near Miss</Badge>}
+                      </div>
                     </div>
-                    <Badge className={`text-xs ${statusColors[r.status] || ""}`}>{r.status}</Badge>
-                  </div>
-                  <div>
-                    <p className="font-semibold capitalize">{r.type?.replace("_", " ")}</p>
-                    <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.description || "No description"}</p>
-                  </div>
-                  <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
-                    <span>{r.date ? format(parseISO(r.date), "MMM dd, yyyy") : "No date"}</span>
-                    {r.injured_person && <span className="text-destructive font-medium">Injury: {r.injured_person}</span>}
-                  </div>
-                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
-                    <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+                    <div>
+                      <p className="font-semibold capitalize">{r.type?.replace("_", " ")}</p>
+                      <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{r.description || "No description"}</p>
+                    </div>
+                    {daysOpen !== null && <Badge className="text-xs bg-red-100 text-red-700">{daysOpen} days open</Badge>}
+                    <div className="flex items-center justify-between text-xs text-muted-foreground pt-2 border-t">
+                      <span>{r.date ? format(parseISO(r.date), "MMM dd, yyyy") : "No date"}</span>
+                      {r.injured_person && <span className="text-destructive font-medium">Injury: {r.injured_person}</span>}
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
           </div>
         ) : (
           <>
@@ -237,31 +288,51 @@ export default function HSE() {
               <Table><TableHeader><TableRow>
                 <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
                 <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+                <SortableHeader label="Severity" sortKey="severity" direction={getSortDirection("severity")} onToggle={toggleSort} />
                 <SortableHeader label="Injured Person" sortKey="injured_person" direction={getSortDirection("injured_person")} onToggle={toggleSort} />
                 <SortableHeader label="Description" sortKey="description" direction={getSortDirection("description")} onToggle={toggleSort} />
                 <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+                <SortableHeader label="Investigation" sortKey="investigation_status" direction={getSortDirection("investigation_status")} onToggle={toggleSort} />
                 <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
               </TableRow></TableHeader>
-                <TableBody>{pageData.map((r: any) => (
-                  <TableRow key={r.id} className="group">
-                    <TableCell className="text-sm">{r.date ? format(parseISO(r.date), "MMM dd, yyyy") : "—"}</TableCell>
-                    <TableCell>
-                      <Badge className={`gap-1 ${typeColors[r.type] || ""}`}>
-                        <TypeIcon type={r.type} />
-                        {r.type?.replace("_", " ")}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{r.injured_person ? <span className="text-destructive font-medium">{r.injured_person}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
-                    <TableCell className="max-w-xs truncate">{r.description || "—"}</TableCell>
-                    <TableCell><Badge className={statusColors[r.status] || ""}>{r.status}</Badge></TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>))}</TableBody></Table>
+                <TableBody>{pageData.map((r: any) => {
+                  const daysOpen = getDaysOpen(r);
+                  return (
+                    <TableRow key={r.id} className={`group ${severityRowClass[r.severity] || ""}`}>
+                      <TableCell className="text-sm">{r.date ? format(parseISO(r.date), "MMM dd, yyyy") : "—"}</TableCell>
+                      <TableCell>
+                        <div className="flex flex-col gap-1">
+                          <Badge className={`gap-1 ${typeColors[r.type] || ""}`}>
+                            <TypeIcon type={r.type} />
+                            {r.type?.replace("_", " ")}
+                          </Badge>
+                          {r.is_near_miss && <Badge className="text-[10px] bg-amber-100 text-amber-700">Near Miss</Badge>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {r.severity && <Badge variant="outline" className="capitalize text-xs">{r.severity}</Badge>}
+                      </TableCell>
+                      <TableCell>{r.injured_person ? <span className="text-destructive font-medium">{r.injured_person}</span> : <span className="text-muted-foreground">—</span>}</TableCell>
+                      <TableCell className="max-w-xs">
+                        <div className="truncate">{r.description || "—"}</div>
+                        {daysOpen !== null && <Badge className="text-[10px] bg-red-100 text-red-700 mt-1">{daysOpen} days open</Badge>}
+                      </TableCell>
+                      <TableCell><Badge className={statusColors[r.status] || ""}>{r.status}</Badge></TableCell>
+                      <TableCell>
+                        {r.investigation_status && (
+                          <Badge className={`text-xs ${investigationStatusColors[r.investigation_status] || "bg-gray-100 text-gray-600"}`}>{r.investigation_status}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}</TableBody></Table>
             </div>
           </>
         )}
@@ -274,16 +345,43 @@ export default function HSE() {
         <div className="space-y-4">
           <div><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
           <div><Label>Type</Label><ComboboxSelect value={form.type} onValueChange={v => setForm({ ...form, type: v })} options={typeOptions} placeholder="Select or type..." /></div>
+          <div><Label>Severity</Label>
+            <Select value={form.severity} onValueChange={v => setForm({ ...form, severity: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="critical">Critical</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="open">Open</SelectItem><SelectItem value="investigating">Investigating</SelectItem><SelectItem value="closed">Closed</SelectItem></SelectContent></Select></div>}
+          <div><Label>Investigation Status</Label>
+            <Select value={form.investigation_status} onValueChange={v => setForm({ ...form, investigation_status: v })}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="Pending">Pending</SelectItem>
+                <SelectItem value="In Progress">In Progress</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} /></div>
+          <div><Label>Root Cause</Label><Input value={form.root_cause} onChange={e => setForm({ ...form, root_cause: e.target.value })} placeholder="Identified root cause" /></div>
+          <div><Label>Corrective Actions</Label><Textarea value={form.corrective_actions} onChange={e => setForm({ ...form, corrective_actions: e.target.value })} placeholder="Actions taken to prevent recurrence" /></div>
           <div><Label>Injured Person</Label><Input value={form.injured_person} onChange={e => setForm({ ...form, injured_person: e.target.value })} placeholder="If applicable" /></div>
           <div><Label>Action Taken</Label><Textarea value={form.action_taken} onChange={e => setForm({ ...form, action_taken: e.target.value })} /></div>
+          <div className="flex items-center gap-2">
+            <input type="checkbox" id="is_near_miss" checked={form.is_near_miss} onChange={e => setForm({ ...form, is_near_miss: e.target.checked })} className="h-4 w-4 rounded border accent-primary" />
+            <Label htmlFor="is_near_miss">Near Miss</Label>
+          </div>
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit Report"}</Button>
         </div>
       </DialogContent></Dialog>
 
       {/* View Dialog */}
-      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Incident Details</DialogTitle></DialogHeader>
         {viewing && (
           <div className="space-y-4">
@@ -293,15 +391,38 @@ export default function HSE() {
               </div>
               <div>
                 <p className="font-semibold capitalize text-lg">{viewing.type?.replace("_", " ")}</p>
-                <Badge className={statusColors[viewing.status] || ""}>{viewing.status}</Badge>
+                <div className="flex gap-2 flex-wrap mt-1">
+                  <Badge className={statusColors[viewing.status] || ""}>{viewing.status}</Badge>
+                  {viewing.is_near_miss && <Badge className="bg-amber-100 text-amber-700">Near Miss</Badge>}
+                  {viewing.severity && <Badge variant="outline" className="capitalize">{viewing.severity}</Badge>}
+                </div>
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><p className="text-muted-foreground text-xs">Date</p><p className="font-medium">{viewing.date ? format(parseISO(viewing.date), "MMM dd, yyyy") : "—"}</p></div>
               <div><p className="text-muted-foreground text-xs">Injured Person</p><p className="font-medium">{viewing.injured_person || "None"}</p></div>
+              {viewing.investigation_status && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Investigation Status</p>
+                  <Badge className={`text-xs ${investigationStatusColors[viewing.investigation_status] || ""}`}>{viewing.investigation_status}</Badge>
+                </div>
+              )}
+              {viewing.status === "open" && viewing.date && (
+                <div>
+                  <p className="text-muted-foreground text-xs">Days Open</p>
+                  <Badge className="bg-red-100 text-red-700">{differenceInDays(new Date(), parseISO(viewing.date))} days</Badge>
+                </div>
+              )}
             </div>
             {viewing.description && <div className="text-sm"><p className="text-muted-foreground text-xs mb-1">Description</p><p className="bg-muted/50 rounded-md p-3">{viewing.description}</p></div>}
+            {viewing.root_cause && <div className="text-sm"><p className="text-muted-foreground text-xs mb-1">Root Cause</p><p className="bg-muted/50 rounded-md p-3">{viewing.root_cause}</p></div>}
             {viewing.action_taken && <div className="text-sm"><p className="text-muted-foreground text-xs mb-1">Action Taken</p><p className="bg-emerald-50 dark:bg-emerald-950/20 rounded-md p-3 text-emerald-700 dark:text-emerald-400">{viewing.action_taken}</p></div>}
+            {viewing.corrective_actions && <div className="text-sm"><p className="text-muted-foreground text-xs mb-1">Corrective Actions</p><p className="bg-blue-50 dark:bg-blue-950/20 rounded-md p-3 text-blue-700 dark:text-blue-400">{viewing.corrective_actions}</p></div>}
+            {viewing.status !== "closed" && (
+              <Button variant="destructive" className="w-full h-9" onClick={() => closeIncident.mutate(viewing.id)} disabled={closeIncident.isPending}>
+                <XCircle className="h-4 w-4 mr-2" />{closeIncident.isPending ? "Closing..." : "Close Incident"}
+              </Button>
+            )}
           </div>
         )}
       </DialogContent></Dialog>
