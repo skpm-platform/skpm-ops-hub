@@ -9,7 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Package, AlertTriangle, Pencil, Trash2, LayoutGrid, List, Eye, Boxes, TrendingUp, BarChart3 } from "lucide-react";
+import { Plus, Search, Package, AlertTriangle, Pencil, Trash2, LayoutGrid, List, Eye, Boxes, TrendingUp, BarChart3, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -17,6 +17,7 @@ import { SortableHeader } from "@/components/SortableHeader";
 import { ExportButton } from "@/components/ExportButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ComboboxSelect } from "@/components/ComboboxSelect";
+import { format } from "date-fns";
 
 const categoryColors: Record<string, string> = {
   tools: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -32,24 +33,26 @@ export default function Warehouse() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("all");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: "", sku: "", category: "", quantity: "", min_stock: "", unit_cost: "", unit: "pcs", location: "" });
+  const [stockAdjQty, setStockAdjQty] = useState("");
+  const [form, setForm] = useState({ name: "", sku: "", category: "", quantity: "", min_stock: "", reorder_level: "", unit_cost: "", unit: "pcs", location: "" });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["inventory"],
     queryFn: async () => { const { data } = await (supabase as any).from("inventory").select("*").order("name"); return data || []; },
   });
 
-  const resetForm = () => setForm({ name: "", sku: "", category: "", quantity: "", min_stock: "", unit_cost: "", unit: "pcs", location: "" });
+  const resetForm = () => setForm({ name: "", sku: "", category: "", quantity: "", min_stock: "", reorder_level: "", unit_cost: "", unit: "pcs", location: "" });
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { name: form.name, category: form.category, quantity: parseInt(form.quantity) || 0, min_stock: parseInt(form.min_stock) || 0, unit_cost: parseFloat(form.unit_cost) || 0, unit: form.unit, location: form.location, ...(editingId ? {} : { sku: form.sku || `SKU-${Date.now().toString().slice(-6)}` }), ...(editingId && form.sku ? { sku: form.sku } : {}) };
+      const payload = { name: form.name, category: form.category, quantity: parseInt(form.quantity) || 0, min_stock: parseInt(form.min_stock) || 0, reorder_level: parseInt(form.reorder_level) || null, unit_cost: parseFloat(form.unit_cost) || 0, unit: form.unit, location: form.location, last_updated: new Date().toISOString(), ...(editingId ? {} : { sku: form.sku || `SKU-${Date.now().toString().slice(-6)}` }), ...(editingId && form.sku ? { sku: form.sku } : {}) };
       if (editingId) { const { error } = await (supabase as any).from("inventory").update(payload).eq("id", editingId); if (error) throw error; }
       else { const { error } = await (supabase as any).from("inventory").insert(payload); if (error) throw error; }
     },
@@ -62,18 +65,38 @@ export default function Warehouse() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["inventory"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
+  const stockAdjust = useMutation({
+    mutationFn: async ({ id, delta, type }: { id: string; delta: number; type: "in" | "out" }) => {
+      const item = data.find((r: any) => r.id === id);
+      if (!item) throw new Error("Item not found");
+      const newQty = Math.max(0, (item.quantity || 0) + delta);
+      const { error } = await (supabase as any).from("inventory").update({ quantity: newQty, last_updated: new Date().toISOString() }).eq("id", id);
+      if (error) throw error;
+      // Log movement
+      await (supabase as any).from("inventory_movements").insert({ inventory_id: id, type, quantity: Math.abs(delta), note: `Stock ${type === "in" ? "In" : "Out"} via quick action` }).catch(() => {});
+      return newQty;
+    },
+    onSuccess: (newQty, vars) => {
+      qc.invalidateQueries({ queryKey: ["inventory"] });
+      setViewing((prev: any) => prev ? { ...prev, quantity: newQty } : prev);
+      setStockAdjQty("");
+      toast.success(`Stock ${vars.type === "in" ? "added" : "removed"} successfully`);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ name: r.name, sku: r.sku || "", category: r.category || "", quantity: String(r.quantity || ""), min_stock: String(r.min_stock || ""), unit_cost: String(r.unit_cost || ""), unit: r.unit || "pcs", location: r.location || "" });
+    setForm({ name: r.name, sku: r.sku || "", category: r.category || "", quantity: String(r.quantity || ""), min_stock: String(r.min_stock || ""), reorder_level: String(r.reorder_level || ""), unit_cost: String(r.unit_cost || ""), unit: r.unit || "pcs", location: r.location || "" });
     setOpen(true);
   };
 
   const lowStockItems = data.filter((r: any) => r.quantity <= r.min_stock && r.min_stock > 0);
+  const reorderItems = data.filter((r: any) => r.reorder_level != null && r.quantity <= r.reorder_level);
   const totalValue = data.reduce((s: number, r: any) => s + (r.quantity || 0) * (r.unit_cost || 0), 0);
   const totalItems = data.reduce((s: number, r: any) => s + (r.quantity || 0), 0);
   const categories = [...new Set(data.map((r: any) => r.category).filter(Boolean))] as string[];
 
-  // Category value breakdown
   const categoryValues = categories.map(cat => ({
     name: cat,
     value: data.filter((r: any) => r.category === cat).reduce((s: number, r: any) => s + (r.quantity || 0) * (r.unit_cost || 0), 0),
@@ -82,7 +105,8 @@ export default function Warehouse() {
 
   const filtered = data
     .filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()) || r.sku?.toLowerCase().includes(search.toLowerCase()))
-    .filter((r: any) => stockFilter === "all" || (stockFilter === "low" && r.quantity <= r.min_stock && r.min_stock > 0) || (stockFilter === "ok" && (r.quantity > r.min_stock || r.min_stock === 0)));
+    .filter((r: any) => stockFilter === "all" || (stockFilter === "low" && r.quantity <= r.min_stock && r.min_stock > 0) || (stockFilter === "ok" && (r.quantity > r.min_stock || r.min_stock === 0)))
+    .filter((r: any) => categoryFilter === "all" || r.category === categoryFilter);
   const { pageData, page, totalPages, totalItems: paginatedTotal, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   const stockLevel = (r: any) => {
@@ -92,6 +116,8 @@ export default function Warehouse() {
     if (ratio <= 1.5) return "warning";
     return "normal";
   };
+
+  const isLowStock = (r: any) => r.reorder_level != null ? r.quantity <= r.reorder_level : (r.min_stock > 0 && r.quantity <= r.min_stock);
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -111,12 +137,12 @@ export default function Warehouse() {
       </div>
 
       {/* Low Stock Alert */}
-      {lowStockItems.length > 0 && (
+      {(lowStockItems.length > 0 || reorderItems.length > 0) && (
         <Card className="border-destructive/30 bg-destructive/5">
           <CardContent className="p-4">
             <div className="flex items-center gap-2 mb-2">
               <AlertTriangle className="h-5 w-5 text-destructive" />
-              <p className="font-semibold text-destructive">{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} below minimum stock</p>
+              <p className="font-semibold text-destructive">{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} below minimum stock{reorderItems.length > 0 ? ` • ${reorderItems.length} at reorder level` : ""}</p>
             </div>
             <div className="flex flex-wrap gap-2">
               {lowStockItems.slice(0, 5).map((r: any) => (
@@ -141,7 +167,7 @@ export default function Warehouse() {
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Inventory Value</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Stock Value</p>
             <TrendingUp className="h-4 w-4 text-emerald-500" />
           </div>
           <p className="text-2xl font-bold mt-1">AED {totalValue.toLocaleString()}</p>
@@ -149,11 +175,11 @@ export default function Warehouse() {
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
           <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Low Stock</p>
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Low Stock Items</p>
             <AlertTriangle className={`h-4 w-4 ${lowStockItems.length > 0 ? "text-destructive" : "text-muted-foreground"}`} />
           </div>
           <p className={`text-2xl font-bold mt-1 ${lowStockItems.length > 0 ? "text-destructive" : ""}`}>{lowStockItems.length}</p>
-          <p className="text-xs text-muted-foreground mt-1">{data.length > 0 ? Math.round((lowStockItems.length / data.length) * 100) : 0}% of inventory</p>
+          <p className="text-xs text-muted-foreground mt-1">{reorderItems.length} at reorder level</p>
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
           <div className="flex items-center justify-between">
@@ -165,11 +191,22 @@ export default function Warehouse() {
         </CardContent></Card>
       </div>
 
-      <div className="flex gap-2">
+      {/* Stock Filter */}
+      <div className="flex gap-2 flex-wrap">
         <Button variant={stockFilter === "all" ? "default" : "outline"} size="sm" onClick={() => setStockFilter("all")}>All ({data.length})</Button>
         <Button variant={stockFilter === "low" ? "destructive" : "outline"} size="sm" onClick={() => setStockFilter(stockFilter === "low" ? "all" : "low")} className="gap-1"><AlertTriangle className="h-3 w-3" />Low Stock ({lowStockItems.length})</Button>
         <Button variant={stockFilter === "ok" ? "default" : "outline"} size="sm" onClick={() => setStockFilter(stockFilter === "ok" ? "all" : "ok")}>In Stock ({data.length - lowStockItems.length})</Button>
       </div>
+
+      {/* Category Filter */}
+      {categories.length > 0 && (
+        <div className="flex gap-2 flex-wrap">
+          <Button variant={categoryFilter === "all" ? "secondary" : "outline"} size="sm" onClick={() => setCategoryFilter("all")}>All Categories</Button>
+          {categories.map(cat => (
+            <Button key={cat} variant={categoryFilter === cat ? "secondary" : "outline"} size="sm" className="capitalize" onClick={() => setCategoryFilter(categoryFilter === cat ? "all" : cat)}>{cat}</Button>
+          ))}
+        </div>
+      )}
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
@@ -178,13 +215,14 @@ export default function Warehouse() {
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {pageData.map((r: any) => {
               const level = stockLevel(r);
+              const lowStock = isLowStock(r);
               const stockPct = r.min_stock > 0 ? Math.min(100, Math.round((r.quantity / (r.min_stock * 2)) * 100)) : 100;
               return (
                 <Card key={r.id} className={`hover:shadow-md transition-all group cursor-pointer ${level === "critical" ? "border-destructive/30" : ""}`} onClick={() => { setViewing(r); setViewOpen(true); }}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between">
                       <Badge className={`${categoryColors[r.category] || "bg-muted"} border-0 capitalize`}>{r.category || "other"}</Badge>
-                      {level === "critical" ? <Badge variant="destructive" className="text-[10px]">Low Stock</Badge> :
+                      {lowStock ? <Badge variant="destructive" className="text-[10px]">Low Stock</Badge> :
                         level === "warning" ? <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] border-0">Warning</Badge> :
                           <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] border-0">OK</Badge>}
                     </div>
@@ -203,6 +241,7 @@ export default function Warehouse() {
                       <span className="text-muted-foreground">{r.location || "No location"}</span>
                       <span className="font-semibold">AED {((r.quantity || 0) * (r.unit_cost || 0)).toLocaleString()}</span>
                     </div>
+                    {r.last_updated && <p className="text-[10px] text-muted-foreground">Updated: {format(new Date(r.last_updated), "dd MMM, HH:mm")}</p>}
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
@@ -220,12 +259,15 @@ export default function Warehouse() {
               <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
               <SortableHeader label="Qty" sortKey="quantity" direction={getSortDirection("quantity")} onToggle={toggleSort} />
               <SortableHeader label="Min" sortKey="min_stock" direction={getSortDirection("min_stock")} onToggle={toggleSort} />
+              <SortableHeader label="Reorder" sortKey="reorder_level" direction={getSortDirection("reorder_level")} onToggle={toggleSort} />
               <SortableHeader label="Unit Cost" sortKey="unit_cost" direction={getSortDirection("unit_cost")} onToggle={toggleSort} />
-              <SortableHeader label="Stock Level" sortKey="quantity" direction={null} onToggle={() => {}} />
+              <SortableHeader label="Status" sortKey="quantity" direction={null} onToggle={() => {}} />
+              <SortableHeader label="Last Updated" sortKey="last_updated" direction={getSortDirection("last_updated")} onToggle={toggleSort} />
               <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
             </TableRow></TableHeader>
               <TableBody>{pageData.map((r: any) => {
                 const level = stockLevel(r);
+                const lowStock = isLowStock(r);
                 const stockPct = r.min_stock > 0 ? Math.min(100, Math.round((r.quantity / (r.min_stock * 2)) * 100)) : 100;
                 return (
                   <TableRow key={r.id} className={`group ${level === "critical" ? "bg-destructive/5" : ""}`}>
@@ -237,13 +279,15 @@ export default function Warehouse() {
                       <span className="text-muted-foreground text-xs ml-1">{r.unit}</span>
                     </TableCell>
                     <TableCell>{r.min_stock}</TableCell>
+                    <TableCell>{r.reorder_level ?? "—"}</TableCell>
                     <TableCell>AED {r.unit_cost?.toLocaleString()}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2 min-w-[120px]">
                         <Progress value={stockPct} className={`h-1.5 flex-1 ${level === "critical" ? "[&>div]:bg-destructive" : level === "warning" ? "[&>div]:bg-amber-500" : ""}`} />
-                        {level === "critical" && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                        {lowStock && <Badge variant="destructive" className="text-[10px] shrink-0">Low</Badge>}
                       </div>
                     </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">{r.last_updated ? format(new Date(r.last_updated), "dd/MM HH:mm") : "—"}</TableCell>
                     <TableCell>
                       <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                         <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
@@ -264,6 +308,7 @@ export default function Warehouse() {
         <DialogHeader><DialogTitle>Item Details</DialogTitle></DialogHeader>
         {viewing && (() => {
           const level = stockLevel(viewing);
+          const lowStock = isLowStock(viewing);
           const stockPct = viewing.min_stock > 0 ? Math.min(100, Math.round((viewing.quantity / (viewing.min_stock * 2)) * 100)) : 100;
           const itemValue = (viewing.quantity || 0) * (viewing.unit_cost || 0);
           return (
@@ -282,7 +327,10 @@ export default function Warehouse() {
                 <div><p className="text-muted-foreground text-xs">Location</p><p className="font-medium">{viewing.location || "—"}</p></div>
                 <div><p className="text-muted-foreground text-xs">Unit</p><p className="font-medium">{viewing.unit}</p></div>
                 <div><p className="text-muted-foreground text-xs">Unit Cost</p><p className="font-medium">AED {viewing.unit_cost?.toLocaleString()}</p></div>
+                {viewing.reorder_level != null && <div><p className="text-muted-foreground text-xs">Reorder Level</p><p className="font-medium">{viewing.reorder_level} {viewing.unit}</p></div>}
+                {viewing.last_updated && <div><p className="text-muted-foreground text-xs">Last Updated</p><p className="font-medium">{format(new Date(viewing.last_updated), "dd MMM yyyy, HH:mm")}</p></div>}
               </div>
+              {lowStock && <Badge variant="destructive" className="text-xs">⚠ Low Stock Alert</Badge>}
               <div className="bg-muted/50 rounded-lg p-4 space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Current Stock</span>
@@ -296,6 +344,19 @@ export default function Warehouse() {
                 <div className="flex justify-between text-sm pt-1 border-t">
                   <span>Total Value</span>
                   <span className="font-semibold">AED {itemValue.toLocaleString()}</span>
+                </div>
+              </div>
+              {/* Stock In/Out */}
+              <div className="border rounded-lg p-3 space-y-2">
+                <p className="text-sm font-medium">Quick Stock Adjustment</p>
+                <Input type="number" placeholder="Quantity" value={stockAdjQty} onChange={e => setStockAdjQty(e.target.value)} className="h-8" min="1" />
+                <div className="flex gap-2">
+                  <Button size="sm" className="flex-1 gap-1 bg-emerald-600 hover:bg-emerald-700" disabled={!stockAdjQty || stockAdjust.isPending} onClick={() => stockAdjust.mutate({ id: viewing.id, delta: parseInt(stockAdjQty) || 0, type: "in" })}>
+                    <ArrowDownToLine className="h-3.5 w-3.5" />Stock In
+                  </Button>
+                  <Button size="sm" variant="outline" className="flex-1 gap-1 text-destructive border-destructive/30" disabled={!stockAdjQty || stockAdjust.isPending} onClick={() => stockAdjust.mutate({ id: viewing.id, delta: -(parseInt(stockAdjQty) || 0), type: "out" })}>
+                    <ArrowUpFromLine className="h-3.5 w-3.5" />Stock Out
+                  </Button>
                 </div>
               </div>
             </div>
@@ -312,9 +373,10 @@ export default function Warehouse() {
             <div><Label>SKU</Label><Input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="Auto-generated" /></div>
             <div><Label>Category</Label><ComboboxSelect value={form.category} onChange={v => setForm({ ...form, category: v })} options={["tools", "safety", "electrical", "plumbing", "paint", "hardware", "consumables"]} placeholder="Select or type" /></div>
           </div>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div><Label>Quantity</Label><Input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
             <div><Label>Min Stock</Label><Input type="number" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: e.target.value })} /></div>
+            <div><Label>Reorder Level</Label><Input type="number" value={form.reorder_level} onChange={e => setForm({ ...form, reorder_level: e.target.value })} placeholder="Optional" /></div>
             <div><Label>Unit Cost</Label><Input type="number" value={form.unit_cost} onChange={e => setForm({ ...form, unit_cost: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">

@@ -12,13 +12,13 @@ import {
   Users, Clock, DollarSign, CheckSquare, TrendingUp, TrendingDown,
   ArrowUpRight, Activity, Building2, FileText, AlertTriangle, Briefcase,
   Download, Shield, CalendarRange, Plus, Send, UserMinus, Wrench,
-  Receipt, Sparkles, ChevronRight, Zap, FolderKanban,
+  Receipt, Sparkles, ChevronRight, Zap, FolderKanban, UserPlus, Ticket,
 } from "lucide-react";
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Area, AreaChart, PieChart, Pie, Cell,
 } from "recharts";
-import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
+import { format, subMonths, startOfMonth, endOfMonth, addDays } from "date-fns";
 import * as XLSX from "xlsx";
 import { AIInsightsWidget } from "@/components/AIInsightsWidget";
 import { ExpiryAlertsWidget } from "@/components/ExpiryAlertsWidget";
@@ -39,7 +39,6 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  // Data queries
   const { data: employees } = useQuery({
     queryKey: ["dashboard-employees"],
     queryFn: async () => {
@@ -130,6 +129,48 @@ export default function Dashboard() {
     },
   });
 
+  // Today helpdesk open tickets
+  const { data: helpdeskTickets } = useQuery({
+    queryKey: ["dashboard-helpdesk-open"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("helpdesk_tickets").select("id").eq("status", "open");
+      return data ?? [];
+    },
+  });
+
+  // Expiry alerts: visa expiring in 30 days
+  const { data: visaExpiring } = useQuery({
+    queryKey: ["dashboard-visa-expiring"],
+    queryFn: async () => {
+      const now = format(new Date(), "yyyy-MM-dd");
+      const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
+      const { data } = await (supabase as any).from("manpower").select("id,name,visa_expiry").lte("visa_expiry", in30).gte("visa_expiry", now);
+      return data ?? [];
+    },
+  });
+
+  // Contracts expiring in 30 days
+  const { data: contractsExpiring } = useQuery({
+    queryKey: ["dashboard-contracts-expiring"],
+    queryFn: async () => {
+      const now = format(new Date(), "yyyy-MM-dd");
+      const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
+      const { data } = await (supabase as any).from("contracts").select("id,title,end_date").lte("end_date", in30).gte("end_date", now);
+      return data ?? [];
+    },
+  });
+
+  // Assets maintenance due in 30 days
+  const { data: assetsMaintDue } = useQuery({
+    queryKey: ["dashboard-assets-maint"],
+    queryFn: async () => {
+      const now = format(new Date(), "yyyy-MM-dd");
+      const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
+      const { data } = await (supabase as any).from("assets").select("id,name,next_maintenance_date").lte("next_maintenance_date", in30).gte("next_maintenance_date", now);
+      return data ?? [];
+    },
+  });
+
   // Computed values
   const revenueChart = Array.from({ length: rangeMonths }, (_, i) => {
     const month = subMonths(new Date(), rangeMonths - 1 - i);
@@ -169,6 +210,8 @@ export default function Dashboard() {
   const pendingExpenses = expensesPending?.length ?? 0;
   const netProfit = totalIncome - totalExpense;
   const profitMargin = totalIncome > 0 ? Math.round((netProfit / totalIncome) * 100) : 0;
+  const openTickets = helpdeskTickets?.length ?? 0;
+  const totalPendingApprovals = pendingLeaves + pendingExpenses;
 
   const taskDist = [
     { name: "To Do", value: tasks?.filter(t => t.status === "todo").length ?? 0, color: "hsl(var(--muted-foreground))" },
@@ -184,14 +227,14 @@ export default function Dashboard() {
     { name: "Cancelled", value: projects?.filter(p => p.status === "cancelled").length ?? 0, color: "hsl(var(--destructive))" },
   ].filter(d => d.value > 0);
 
-  // Quick actions based on role
   const quickActions = [
-    { label: "New Task", icon: CheckSquare, path: "/tasks", color: "bg-primary/10 text-primary hover:bg-primary/20" },
-    { label: "New Project", icon: FolderKanban, path: "/projects", color: "bg-success/10 text-success hover:bg-success/20", show: isManagerUp },
-    { label: "Submit Expense", icon: Receipt, path: "/expenses", color: "bg-warning/10 text-warning hover:bg-warning/20" },
-    { label: "Work Order", icon: Wrench, path: "/work-orders", color: "bg-info/10 text-info hover:bg-info/20" },
+    { label: "Add Employee", icon: UserPlus, path: "/employees", color: "bg-primary/10 text-primary hover:bg-primary/20" },
+    { label: "Create Invoice", icon: FileText, path: "/invoices", color: "bg-success/10 text-success hover:bg-success/20", show: isManagerUp },
+    { label: "New Task", icon: CheckSquare, path: "/tasks", color: "bg-info/10 text-info hover:bg-info/20" },
+    { label: "Log Expense", icon: Receipt, path: "/expenses", color: "bg-warning/10 text-warning hover:bg-warning/20" },
+    { label: "New Project", icon: FolderKanban, path: "/projects", color: "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20", show: isManagerUp },
+    { label: "Work Order", icon: Wrench, path: "/work-orders", color: "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20" },
     { label: "Leave Request", icon: UserMinus, path: "/leave", color: "bg-destructive/10 text-destructive hover:bg-destructive/20" },
-    { label: "New Invoice", icon: Receipt, path: "/invoices", color: "bg-primary/10 text-primary hover:bg-primary/20", show: isManagerUp },
   ].filter(a => a.show !== false);
 
   const handleFullExport = async () => {
@@ -207,17 +250,15 @@ export default function Dashboard() {
     XLSX.writeFile(wb, `SKPM_Full_Export_${format(new Date(), "yyyy-MM-dd")}.xlsx`);
   };
 
+  const expiryAlertCount = (visaExpiring?.length ?? 0) + (contractsExpiring?.length ?? 0) + (assetsMaintDue?.length ?? 0);
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Welcome Header */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">
-            {greeting}, {firstName} 👋
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {format(new Date(), "EEEE, MMMM d, yyyy")} • Here's what's happening today
-          </p>
+          <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting}, {firstName} 👋</h1>
+          <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, MMMM d, yyyy")} • Here's what's happening today</p>
         </div>
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5">
@@ -244,43 +285,91 @@ export default function Dashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="flex flex-wrap gap-2">
-        {quickActions.map((action) => (
-          <Button
-            key={action.label}
-            variant="ghost"
-            size="sm"
-            className={`h-9 gap-2 text-xs font-medium rounded-lg border border-transparent transition-all ${action.color}`}
-            onClick={() => navigate(action.path)}
-          >
-            <action.icon className="h-3.5 w-3.5" />
-            {action.label}
-          </Button>
-        ))}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <div className="flex flex-wrap gap-2">
+          {quickActions.map((action) => (
+            <Button key={action.label} variant="ghost" size="sm"
+              className={`h-9 gap-2 text-xs font-medium rounded-lg border border-transparent transition-all ${action.color}`}
+              onClick={() => navigate(action.path)}>
+              <action.icon className="h-3.5 w-3.5" />{action.label}
+            </Button>
+          ))}
+        </div>
       </div>
+
+      {/* Today's Stats */}
+      <div className="space-y-2">
+        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Today</p>
+        <div className="grid gap-3 grid-cols-3">
+          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/attendance")}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-success/10 flex items-center justify-center"><Users className="h-4 w-4 text-success" /></div>
+              <div><p className="text-lg font-bold">{presentToday}</p><p className="text-xs text-muted-foreground">Check-ins</p></div>
+            </CardContent>
+          </Card>
+          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/helpdesk")}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center"><Ticket className="h-4 w-4 text-warning" /></div>
+              <div><p className="text-lg font-bold">{openTickets}</p><p className="text-xs text-muted-foreground">Open Tickets</p></div>
+            </CardContent>
+          </Card>
+          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/approvals")}>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${totalPendingApprovals > 0 ? "bg-destructive/10" : "bg-muted"}`}>
+                <Clock className={`h-4 w-4 ${totalPendingApprovals > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+              </div>
+              <div><p className="text-lg font-bold">{totalPendingApprovals}</p><p className="text-xs text-muted-foreground">Pending Approvals</p></div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Expiry Alerts Section */}
+      {expiryAlertCount > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Expiry Alerts (30 days)</p>
+          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+            {(visaExpiring?.length ?? 0) > 0 && (
+              <Card className="border-destructive/30 bg-destructive/5 cursor-pointer hover:shadow-md" onClick={() => navigate("/manpower")}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+                  <div><p className="text-sm font-semibold text-destructive">{visaExpiring?.length} Visa Expiries</p><p className="text-xs text-muted-foreground">Within 30 days</p></div>
+                </CardContent>
+              </Card>
+            )}
+            {(contractsExpiring?.length ?? 0) > 0 && (
+              <Card className="border-warning/30 bg-warning/5 cursor-pointer hover:shadow-md" onClick={() => navigate("/contracts")}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
+                  <div><p className="text-sm font-semibold text-warning">{contractsExpiring?.length} Contracts</p><p className="text-xs text-muted-foreground">Expiring soon</p></div>
+                </CardContent>
+              </Card>
+            )}
+            {(assetsMaintDue?.length ?? 0) > 0 && (
+              <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 cursor-pointer hover:shadow-md" onClick={() => navigate("/assets")}>
+                <CardContent className="p-4 flex items-center gap-3">
+                  <Wrench className="h-5 w-5 text-amber-600 shrink-0" />
+                  <div><p className="text-sm font-semibold text-amber-700 dark:text-amber-400">{assetsMaintDue?.length} Assets</p><p className="text-xs text-muted-foreground">Maintenance due</p></div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Pending Approvals Banner */}
       {isManagerUp && (pendingLeaves > 0 || pendingExpenses > 0 || openWO > 0) && (
         <Card className="border-warning/30 bg-gradient-to-r from-warning/5 to-transparent">
           <CardContent className="p-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-warning/15 flex items-center justify-center">
-                <AlertTriangle className="h-4 w-4 text-warning" />
-              </div>
+              <div className="h-8 w-8 rounded-full bg-warning/15 flex items-center justify-center"><AlertTriangle className="h-4 w-4 text-warning" /></div>
               <div>
                 <p className="text-sm font-medium text-foreground">Pending Approvals</p>
-                <p className="text-xs text-muted-foreground">
-                  {[
-                    pendingLeaves > 0 && `${pendingLeaves} leave request${pendingLeaves > 1 ? "s" : ""}`,
-                    pendingExpenses > 0 && `${pendingExpenses} expense${pendingExpenses > 1 ? "s" : ""}`,
-                    openWO > 0 && `${openWO} work order${openWO > 1 ? "s" : ""}`,
-                  ].filter(Boolean).join(" • ")}
-                </p>
+                <p className="text-xs text-muted-foreground">{[pendingLeaves > 0 && `${pendingLeaves} leave request${pendingLeaves > 1 ? "s" : ""}`, pendingExpenses > 0 && `${pendingExpenses} expense${pendingExpenses > 1 ? "s" : ""}`, openWO > 0 && `${openWO} work order${openWO > 1 ? "s" : ""}`].filter(Boolean).join(" • ")}</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/approvals")}>
-              Review <ChevronRight className="h-3 w-3" />
-            </Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/approvals")}>Review <ChevronRight className="h-3 w-3" /></Button>
           </CardContent>
         </Card>
       )}
@@ -308,9 +397,7 @@ export default function Dashboard() {
                   <kpi.icon className="h-4 w-4" />
                 </div>
               </div>
-              {"progress" in kpi && kpi.progress !== undefined && (
-                <Progress value={kpi.progress} className="h-1 mt-2.5" />
-              )}
+              {"progress" in kpi && kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-2.5" />}
               <div className="flex items-center gap-1 mt-2 text-[11px] text-muted-foreground">
                 {kpi.trend === "up" ? <TrendingUp className="h-3 w-3 text-success" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
                 <span>{kpi.sub}</span>
@@ -354,9 +441,7 @@ export default function Dashboard() {
         </Card>
 
         <Card className="border shadow-sm">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-semibold">Task Distribution</CardTitle>
-          </CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Task Distribution</CardTitle></CardHeader>
           <CardContent className="flex flex-col items-center">
             {taskDist.length > 0 ? (
               <>
@@ -459,14 +544,12 @@ export default function Dashboard() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        {/* Active Projects with Progress */}
+        {/* Active Projects */}
         <Card className="border shadow-sm">
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Active Projects</CardTitle>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/projects")}>
-                View all <ChevronRight className="h-3 w-3" />
-              </Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/projects")}>View all <ChevronRight className="h-3 w-3" /></Button>
             </div>
           </CardHeader>
           <CardContent className="space-y-1">
@@ -477,18 +560,11 @@ export default function Dashboard() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
-                      <Badge variant="outline" className="text-[9px] h-4 px-1.5">
-                        {p.priority}
-                      </Badge>
+                      <Badge variant="outline" className="text-[9px] h-4 px-1.5">{p.priority}</Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-[10px] text-muted-foreground">{p.project_no ?? "No ID"}</p>
-                      {p.budget && (
-                        <>
-                          <span className="text-[10px] text-muted-foreground">•</span>
-                          <span className="text-[10px] text-muted-foreground">{budgetUsed}% budget used</span>
-                        </>
-                      )}
+                      {p.budget && <><span className="text-[10px] text-muted-foreground">•</span><span className="text-[10px] text-muted-foreground">{budgetUsed}% budget used</span></>}
                     </div>
                     {p.budget && <Progress value={budgetUsed} className="h-1 mt-1.5" />}
                   </div>
@@ -502,11 +578,7 @@ export default function Dashboard() {
               <div className="flex flex-col items-center py-8 gap-2">
                 <Briefcase className="h-8 w-8 text-muted-foreground/30" />
                 <p className="text-xs text-muted-foreground">No active projects</p>
-                {isManagerUp && (
-                  <Button variant="outline" size="sm" className="h-7 text-xs gap-1 mt-1" onClick={() => navigate("/projects")}>
-                    <Plus className="h-3 w-3" /> Create Project
-                  </Button>
-                )}
+                {isManagerUp && <Button variant="outline" size="sm" className="h-7 text-xs gap-1 mt-1" onClick={() => navigate("/projects")}><Plus className="h-3 w-3" /> Create Project</Button>}
               </div>
             )}
           </CardContent>
@@ -517,30 +589,22 @@ export default function Dashboard() {
           <CardHeader className="pb-2">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
-              {isAdmin && (
-                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/audit-logs")}>
-                  View all <ChevronRight className="h-3 w-3" />
-                </Button>
-              )}
+              {isAdmin && <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/audit-logs")}>View all <ChevronRight className="h-3 w-3" /></Button>}
             </div>
           </CardHeader>
           <CardContent>
             {auditLogs && auditLogs.length > 0 ? (
               <div className="space-y-0.5">
-                {auditLogs.slice(0, 8).map((log) => (
+                {auditLogs.slice(0, 5).map((log: any) => (
                   <div key={log.id} className="flex items-start justify-between py-2 border-b border-border/50 last:border-0 hover:bg-secondary/30 -mx-2 px-2 rounded transition-colors">
                     <div className="min-w-0 flex items-start gap-2">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5">
-                        <Zap className="h-3 w-3 text-primary" />
-                      </div>
+                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5"><Zap className="h-3 w-3 text-primary" /></div>
                       <div>
                         <p className="text-xs font-medium text-foreground truncate">{log.action}</p>
                         {log.details && <p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{log.details}</p>}
                       </div>
                     </div>
-                    <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2 tabular-nums">
-                      {format(new Date(log.created_at), "HH:mm")}
-                    </span>
+                    <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2 tabular-nums">{format(new Date(log.created_at), "HH:mm")}</span>
                   </div>
                 ))}
               </div>

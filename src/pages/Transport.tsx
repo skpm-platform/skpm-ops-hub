@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Truck, Pencil, Trash2, Eye, LayoutGrid, List, Car, Bus, AlertTriangle, Calendar, Gauge } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Plus, Search, Truck, Pencil, Trash2, Eye, LayoutGrid, List, Car, Bus, AlertTriangle, Calendar, Gauge, CheckCircle, Fuel, Wrench, User } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -32,12 +33,27 @@ const vehicleTypeColors: Record<string, string> = {
   crane: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
   forklift: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400",
 };
+const fuelLevelColors: Record<string, string> = {
+  Full: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+  "3/4": "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  Half: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  "1/4": "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400",
+  Empty: "bg-destructive/10 text-destructive",
+};
 
-function regExpiryBadge(expiry: string | null) {
+function expiryBadge(expiry: string | null, label?: string) {
   if (!expiry) return null;
   const days = differenceInDays(parseISO(expiry), new Date());
-  if (days < 0) return <Badge className="bg-destructive/10 text-destructive text-[10px]">Expired</Badge>;
-  if (days <= 30) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px]">{days}d left</Badge>;
+  if (days < 0) return <Badge className="bg-destructive/10 text-destructive text-[10px] border-0">{label ? `${label} Expired` : "Expired"}</Badge>;
+  if (days <= 30) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] border-0">{label ? `${label} ` : ""}{days}d left</Badge>;
+  return null;
+}
+
+function maintenanceBadge(serviceDate: string | null) {
+  if (!serviceDate) return null;
+  const days = differenceInDays(parseISO(serviceDate), new Date());
+  if (days < 0) return <Badge variant="destructive" className="text-[10px]">Overdue</Badge>;
+  if (days <= 7) return <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] border-0">Due Soon</Badge>;
   return null;
 }
 
@@ -51,11 +67,21 @@ export default function Transport() {
   const [viewing, setViewing] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ make_model: "", plate_number: "", type: "car", capacity: "", registration_expiry: "", status: "active" });
+  const [form, setForm] = useState({
+    make_model: "", plate_number: "", type: "car", capacity: "",
+    registration_expiry: "", insurance_expiry: "", status: "active",
+    last_fuel_date: "", fuel_level: "", next_service_date: "",
+    driver_id: "", odometer_km: "",
+  });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["vehicles"],
     queryFn: async () => { const { data } = await (supabase as any).from("vehicles").select("*").order("created_at", { ascending: false }); return data || []; },
+  });
+
+  const { data: employees = [] } = useQuery({
+    queryKey: ["employees-list"],
+    queryFn: async () => { const { data } = await supabase.from("employees").select("id, name").order("name"); return data || []; },
   });
 
   const tripLogs = useQuery({
@@ -63,11 +89,24 @@ export default function Transport() {
     queryFn: async () => { const { data } = await (supabase as any).from("trip_logs").select("*"); return data || []; },
   });
 
-  const resetForm = () => setForm({ make_model: "", plate_number: "", type: "car", capacity: "", registration_expiry: "", status: "active" });
+  const resetForm = () => setForm({
+    make_model: "", plate_number: "", type: "car", capacity: "",
+    registration_expiry: "", insurance_expiry: "", status: "active",
+    last_fuel_date: "", fuel_level: "", next_service_date: "",
+    driver_id: "", odometer_km: "",
+  });
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { make_model: form.make_model, plate_number: form.plate_number, type: form.type, capacity: parseInt(form.capacity) || null, registration_expiry: form.registration_expiry || null, status: form.status, ...(editingId ? {} : { vehicle_no: `VEH-${Date.now().toString().slice(-6)}` }) };
+      const payload = {
+        make_model: form.make_model, plate_number: form.plate_number, type: form.type,
+        capacity: parseInt(form.capacity) || null, registration_expiry: form.registration_expiry || null,
+        insurance_expiry: form.insurance_expiry || null, status: form.status,
+        last_fuel_date: form.last_fuel_date || null, fuel_level: form.fuel_level || null,
+        next_service_date: form.next_service_date || null,
+        driver_id: form.driver_id || null, odometer_km: parseInt(form.odometer_km) || null,
+        ...(editingId ? {} : { vehicle_no: `VEH-${Date.now().toString().slice(-6)}` }),
+      };
       if (editingId) { const { error } = await (supabase as any).from("vehicles").update(payload).eq("id", editingId); if (error) throw error; }
       else { const { error } = await (supabase as any).from("vehicles").insert(payload); if (error) throw error; }
     },
@@ -80,22 +119,52 @@ export default function Transport() {
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["vehicles"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
+  const completeTripMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("vehicles").update({ status: "active" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["vehicles"] });
+      setViewing((prev: any) => prev ? { ...prev, status: "active" } : prev);
+      toast.success("Trip marked as complete");
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ make_model: r.make_model || "", plate_number: r.plate_number || "", type: r.type || "car", capacity: String(r.capacity || ""), registration_expiry: r.registration_expiry || "", status: r.status || "active" });
+    setForm({
+      make_model: r.make_model || "", plate_number: r.plate_number || "", type: r.type || "car",
+      capacity: String(r.capacity || ""), registration_expiry: r.registration_expiry || "",
+      insurance_expiry: r.insurance_expiry || "", status: r.status || "active",
+      last_fuel_date: r.last_fuel_date || "", fuel_level: r.fuel_level || "",
+      next_service_date: r.next_service_date || "", driver_id: r.driver_id || "",
+      odometer_km: String(r.odometer_km || ""),
+    });
     setOpen(true);
   };
 
   const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
-  const expiringCount = data.filter((r: any) => r.registration_expiry && differenceInDays(parseISO(r.registration_expiry), new Date()) <= 30 && differenceInDays(parseISO(r.registration_expiry), new Date()) >= 0).length;
-  const expiredCount = data.filter((r: any) => r.registration_expiry && differenceInDays(parseISO(r.registration_expiry), new Date()) < 0).length;
+  const expiringCount = data.filter((r: any) => {
+    const regDays = r.registration_expiry ? differenceInDays(parseISO(r.registration_expiry), new Date()) : null;
+    const insDays = r.insurance_expiry ? differenceInDays(parseISO(r.insurance_expiry), new Date()) : null;
+    return (regDays !== null && regDays >= 0 && regDays <= 30) || (insDays !== null && insDays >= 0 && insDays <= 30);
+  }).length;
+  const expiredCount = data.filter((r: any) => {
+    const regDays = r.registration_expiry ? differenceInDays(parseISO(r.registration_expiry), new Date()) : null;
+    const insDays = r.insurance_expiry ? differenceInDays(parseISO(r.insurance_expiry), new Date()) : null;
+    return (regDays !== null && regDays < 0) || (insDays !== null && insDays < 0);
+  }).length;
+  const maintenanceDueCount = data.filter((r: any) => r.next_service_date && differenceInDays(parseISO(r.next_service_date), new Date()) <= 7).length;
   const totalCapacity = data.reduce((s: number, r: any) => s + (r.capacity || 0), 0);
   const activeRate = data.length > 0 ? Math.round(((statusCounts.active || 0) / data.length) * 100) : 0;
-
-  // Trip stats
   const trips = tripLogs.data || [];
   const totalKm = trips.reduce((s: number, r: any) => s + (r.km || 0), 0);
   const totalFuelCost = trips.reduce((s: number, r: any) => s + (r.fuel_cost || 0), 0);
+
+  const employeeMap = employees.reduce((a: Record<string, string>, e: any) => { a[e.id] = e.name; return a; }, {});
+  const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));
 
   const filtered = data
     .filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()))
@@ -124,14 +193,14 @@ export default function Transport() {
         </div>
       </div>
 
-      {/* Expiry Alert */}
-      {(expiringCount > 0 || expiredCount > 0) && (
+      {(expiringCount > 0 || expiredCount > 0 || maintenanceDueCount > 0) && (
         <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
           <CardContent className="p-4 flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
-            <div className="text-sm">
-              {expiredCount > 0 && <span className="text-destructive font-medium">{expiredCount} expired registration{expiredCount > 1 ? "s" : ""}. </span>}
+            <div className="text-sm flex flex-wrap gap-2">
+              {expiredCount > 0 && <span className="text-destructive font-medium">{expiredCount} expired document{expiredCount > 1 ? "s" : ""}.</span>}
               {expiringCount > 0 && <span className="text-amber-700 dark:text-amber-400">{expiringCount} expiring within 30 days.</span>}
+              {maintenanceDueCount > 0 && <span className="text-amber-700 dark:text-amber-400">{maintenanceDueCount} maintenance due soon.</span>}
             </div>
           </CardContent>
         </Card>
@@ -167,7 +236,7 @@ export default function Transport() {
         </CardContent></Card>
       </div>
 
-      <StatusFilter statuses={[{ value: "all", label: "All", count: data.length }, { value: "active", label: "Active", count: statusCounts.active || 0 }, { value: "maintenance", label: "Maintenance", count: statusCounts.maintenance || 0 }, { value: "inactive", label: "Inactive", count: statusCounts.inactive || 0 }]} selected={statusFilter} onSelect={setStatusFilter} />
+      <StatusFilter statuses={[{ value: "all", label: "All", count: data.length }, { value: "active", label: "Active", count: statusCounts.active || 0 }, { value: "in-use", label: "In Use", count: statusCounts["in-use"] || 0 }, { value: "maintenance", label: "Maintenance", count: statusCounts.maintenance || 0 }, { value: "inactive", label: "Inactive", count: statusCounts.inactive || 0 }]} selected={statusFilter} onSelect={setStatusFilter} />
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search vehicles..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
@@ -181,7 +250,10 @@ export default function Transport() {
                     <div className={`h-10 w-10 rounded-lg flex items-center justify-center ${vehicleTypeColors[r.type] || "bg-muted"}`}>
                       <VTypeIcon type={r.type} />
                     </div>
-                    <Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge>
+                    <div className="flex flex-col gap-1 items-end">
+                      <Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge>
+                      {maintenanceBadge(r.next_service_date)}
+                    </div>
                   </div>
                   <div>
                     <p className="font-semibold">{r.make_model || "Unknown"}</p>
@@ -190,12 +262,13 @@ export default function Transport() {
                       {r.plate_number && <Badge variant="outline" className="text-[10px]">{r.plate_number}</Badge>}
                     </div>
                   </div>
-                  <div className="flex items-center justify-between text-sm pt-2 border-t">
-                    <div className="flex items-center gap-1 text-muted-foreground">
-                      <Calendar className="h-3 w-3" />
-                      <span className="text-xs">{r.registration_expiry ? format(parseISO(r.registration_expiry), "MMM yyyy") : "No expiry"}</span>
-                    </div>
-                    {regExpiryBadge(r.registration_expiry)}
+                  <div className="flex flex-wrap gap-1">
+                    {r.fuel_level && <Badge className={`${fuelLevelColors[r.fuel_level] || ""} text-[10px] border-0`}><Fuel className="h-2.5 w-2.5 mr-1" />{r.fuel_level}</Badge>}
+                    {r.driver_id && <Badge variant="outline" className="text-[10px]"><User className="h-2.5 w-2.5 mr-1" />{employeeMap[r.driver_id] || "Assigned"}</Badge>}
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {expiryBadge(r.registration_expiry, "Reg")}
+                    {expiryBadge(r.insurance_expiry, "Ins")}
                   </div>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                     <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
@@ -212,8 +285,10 @@ export default function Transport() {
               <SortableHeader label="Make/Model" sortKey="make_model" direction={getSortDirection("make_model")} onToggle={toggleSort} />
               <SortableHeader label="Plate" sortKey="plate_number" direction={getSortDirection("plate_number")} onToggle={toggleSort} />
               <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
-              <SortableHeader label="Capacity" sortKey="capacity" direction={getSortDirection("capacity")} onToggle={toggleSort} />
-              <SortableHeader label="Reg Expiry" sortKey="registration_expiry" direction={getSortDirection("registration_expiry")} onToggle={toggleSort} />
+              <SortableHeader label="Driver" sortKey="driver_id" direction={getSortDirection("driver_id")} onToggle={toggleSort} />
+              <SortableHeader label="Fuel" sortKey="fuel_level" direction={getSortDirection("fuel_level")} onToggle={toggleSort} />
+              <SortableHeader label="Service Date" sortKey="next_service_date" direction={getSortDirection("next_service_date")} onToggle={toggleSort} />
+              <SortableHeader label="Odometer" sortKey="odometer_km" direction={getSortDirection("odometer_km")} onToggle={toggleSort} />
               <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
               <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
             </TableRow></TableHeader>
@@ -225,18 +300,25 @@ export default function Transport() {
                       <div className={`h-7 w-7 rounded flex items-center justify-center ${vehicleTypeColors[r.type] || "bg-muted"}`}>
                         <VTypeIcon type={r.type} />
                       </div>
-                      <span className="font-medium">{r.make_model}</span>
+                      <div>
+                        <span className="font-medium">{r.make_model}</span>
+                        {r.plate_number && <span className="text-xs text-muted-foreground block">{r.plate_number}</span>}
+                      </div>
                     </div>
                   </TableCell>
-                  <TableCell>{r.plate_number}</TableCell>
+                  <TableCell>{r.plate_number || "—"}</TableCell>
                   <TableCell><Badge variant="outline" className="capitalize">{r.type}</Badge></TableCell>
-                  <TableCell>{r.capacity}</TableCell>
+                  <TableCell className="text-sm">{r.driver_id ? employeeMap[r.driver_id] || "—" : "—"}</TableCell>
+                  <TableCell>
+                    {r.fuel_level ? <Badge className={`${fuelLevelColors[r.fuel_level] || ""} text-[10px] border-0`}>{r.fuel_level}</Badge> : "—"}
+                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-1">
-                      <span>{r.registration_expiry ? format(parseISO(r.registration_expiry), "MMM dd, yyyy") : "—"}</span>
-                      {regExpiryBadge(r.registration_expiry)}
+                      <span className="text-xs">{r.next_service_date ? format(parseISO(r.next_service_date), "dd MMM yyyy") : "—"}</span>
+                      {maintenanceBadge(r.next_service_date)}
                     </div>
                   </TableCell>
+                  <TableCell>{r.odometer_km ? `${r.odometer_km.toLocaleString()} km` : "—"}</TableCell>
                   <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                   <TableCell>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -253,17 +335,36 @@ export default function Transport() {
       </CardContent></Card>
 
       {/* Add/Edit Dialog */}
-      <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent>
+      <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Vehicle</DialogTitle></DialogHeader>
-        <div className="space-y-4">
+        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
           <div><Label>Make/Model *</Label><Input value={form.make_model} onChange={e => setForm({ ...form, make_model: e.target.value })} /></div>
           <div><Label>Plate Number</Label><Input value={form.plate_number} onChange={e => setForm({ ...form, plate_number: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Type</Label><ComboboxSelect value={form.type} onChange={v => setForm({ ...form, type: v })} options={["bus", "van", "pickup", "car", "truck", "crane", "forklift"]} placeholder="Select type" /></div>
             <div><Label>Capacity</Label><Input type="number" value={form.capacity} onChange={e => setForm({ ...form, capacity: e.target.value })} /></div>
           </div>
-          <div><Label>Registration Expiry</Label><Input type="date" value={form.registration_expiry} onChange={e => setForm({ ...form, registration_expiry: e.target.value })} /></div>
-          {editingId && <div><Label>Status</Label><ComboboxSelect value={form.status} onChange={v => setForm({ ...form, status: v })} options={["active", "maintenance", "inactive"]} placeholder="Select status" /></div>}
+          <div><Label>Assigned Driver</Label>
+            <ComboboxSelect value={form.driver_id} onChange={v => setForm({ ...form, driver_id: v })} options={employeeOptions.map((e: any) => e.label)} placeholder="Select driver" />
+          </div>
+          <div><Label>Odometer (km)</Label><Input type="number" value={form.odometer_km} onChange={e => setForm({ ...form, odometer_km: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Fuel Level</Label>
+              <Select value={form.fuel_level} onValueChange={v => setForm({ ...form, fuel_level: v })}>
+                <SelectTrigger><SelectValue placeholder="Select level" /></SelectTrigger>
+                <SelectContent>
+                  {["Full", "3/4", "Half", "1/4", "Empty"].map(l => <SelectItem key={l} value={l}>{l}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Last Fuel Date</Label><Input type="date" value={form.last_fuel_date} onChange={e => setForm({ ...form, last_fuel_date: e.target.value })} /></div>
+          </div>
+          <div><Label>Next Service Date</Label><Input type="date" value={form.next_service_date} onChange={e => setForm({ ...form, next_service_date: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Registration Expiry</Label><Input type="date" value={form.registration_expiry} onChange={e => setForm({ ...form, registration_expiry: e.target.value })} /></div>
+            <div><Label>Insurance Expiry</Label><Input type="date" value={form.insurance_expiry} onChange={e => setForm({ ...form, insurance_expiry: e.target.value })} /></div>
+          </div>
+          {editingId && <div><Label>Status</Label><ComboboxSelect value={form.status} onChange={v => setForm({ ...form, status: v })} options={["active", "in-use", "maintenance", "inactive"]} placeholder="Select status" /></div>}
           <Button className="w-full" onClick={() => save.mutate()} disabled={!form.make_model || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Add Vehicle"}</Button>
         </div>
       </DialogContent></Dialog>
@@ -283,11 +384,49 @@ export default function Transport() {
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
-              {[["Type", viewing.type], ["Capacity", viewing.capacity], ["Status", viewing.status], ["Reg Expiry", viewing.registration_expiry ? format(parseISO(viewing.registration_expiry), "MMM dd, yyyy") : "—"]].map(([l, v]) => (
-                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><div className="flex items-center gap-1"><p className="font-medium capitalize">{v || "—"}</p>{l === "Reg Expiry" && regExpiryBadge(viewing.registration_expiry)}</div></div>
-              ))}
+              <div><p className="text-muted-foreground text-xs">Type</p><p className="font-medium capitalize">{viewing.type}</p></div>
+              <div><p className="text-muted-foreground text-xs">Capacity</p><p className="font-medium">{viewing.capacity || "—"}</p></div>
+              <div><p className="text-muted-foreground text-xs">Driver</p><p className="font-medium">{viewing.driver_id ? (employeeMap[viewing.driver_id] || "—") : "—"}</p></div>
+              <div><p className="text-muted-foreground text-xs">Odometer</p><p className="font-medium">{viewing.odometer_km ? `${viewing.odometer_km.toLocaleString()} km` : "—"}</p></div>
+              <div>
+                <p className="text-muted-foreground text-xs">Fuel Level</p>
+                {viewing.fuel_level ? <Badge className={`${fuelLevelColors[viewing.fuel_level] || ""} text-xs border-0`}><Fuel className="h-3 w-3 mr-1" />{viewing.fuel_level}</Badge> : <p className="font-medium">—</p>}
+              </div>
+              <div><p className="text-muted-foreground text-xs">Last Fuel Date</p><p className="font-medium">{viewing.last_fuel_date ? format(parseISO(viewing.last_fuel_date), "dd MMM yyyy") : "—"}</p></div>
+              <div>
+                <p className="text-muted-foreground text-xs">Next Service</p>
+                <div className="flex items-center gap-1">
+                  <p className="font-medium">{viewing.next_service_date ? format(parseISO(viewing.next_service_date), "dd MMM yyyy") : "—"}</p>
+                  {maintenanceBadge(viewing.next_service_date)}
+                </div>
+              </div>
+              <div><p className="text-muted-foreground text-xs">Status</p><Badge variant={viewing.status === "active" ? "default" : "secondary"}>{viewing.status}</Badge></div>
             </div>
-            {viewing.assigned_driver && <div className="text-sm"><p className="text-muted-foreground text-xs">Assigned Driver</p><p className="font-medium">{viewing.assigned_driver}</p></div>}
+            {/* Document expiry */}
+            <div className="border rounded-lg p-3 space-y-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase">Documents</p>
+              <div className="flex justify-between text-sm">
+                <span>Registration Expiry</span>
+                <div className="flex items-center gap-1">
+                  <span>{viewing.registration_expiry ? format(parseISO(viewing.registration_expiry), "dd MMM yyyy") : "—"}</span>
+                  {expiryBadge(viewing.registration_expiry)}
+                </div>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span>Insurance Expiry</span>
+                <div className="flex items-center gap-1">
+                  <span>{viewing.insurance_expiry ? format(parseISO(viewing.insurance_expiry), "dd MMM yyyy") : "—"}</span>
+                  {expiryBadge(viewing.insurance_expiry)}
+                </div>
+              </div>
+            </div>
+            {/* Mark Trip Complete */}
+            {viewing.status === "in-use" && (
+              <Button className="w-full gap-2" variant="outline" onClick={() => completeTripMutation.mutate(viewing.id)} disabled={completeTripMutation.isPending}>
+                <CheckCircle className="h-4 w-4 text-emerald-500" />
+                {completeTripMutation.isPending ? "Completing..." : "Mark Trip Complete"}
+              </Button>
+            )}
           </div>
         )}
       </DialogContent></Dialog>

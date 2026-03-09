@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Home, Pencil, Trash2, Eye, LayoutGrid, List, BedDouble, Users, DollarSign, AlertTriangle } from "lucide-react";
+import { Plus, Search, Home, Pencil, Trash2, Eye, LayoutGrid, List, BedDouble, Users, DollarSign, AlertTriangle, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -18,13 +18,14 @@ import { SortableHeader } from "@/components/SortableHeader";
 import { ExportButton } from "@/components/ExportButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusFilter } from "@/components/StatusFilter";
+import { format } from "date-fns";
 
 function occupancyColor(pct: number): string {
+  if (pct > 100) return "text-destructive";
   if (pct >= 90) return "text-destructive";
   if (pct >= 70) return "text-amber-600";
   return "text-emerald-600";
 }
-
 function occupancyBarColor(pct: number): string {
   if (pct >= 90) return "[&>div]:bg-destructive";
   if (pct >= 70) return "[&>div]:bg-amber-500";
@@ -41,18 +42,35 @@ export default function Accommodation() {
   const [viewOpen, setViewOpen] = useState(false);
   const [viewing, setViewing] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ camp_name: "", location: "", total_beds: "", occupied_beds: "", cost_per_bed: "", status: "active" });
+  const [showResidents, setShowResidents] = useState(false);
+  const [form, setForm] = useState({ camp_name: "", location: "", total_beds: "", occupied_beds: "", cost_per_bed: "", status: "active", contract_start: "", contract_end: "" });
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["accommodations"],
     queryFn: async () => { const { data } = await (supabase as any).from("accommodations").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
-  const resetForm = () => setForm({ camp_name: "", location: "", total_beds: "", occupied_beds: "", cost_per_bed: "", status: "active" });
+  // Residents for viewing camp
+  const { data: residents = [] } = useQuery({
+    queryKey: ["accommodation-residents", viewing?.id],
+    enabled: !!viewing && showResidents,
+    queryFn: async () => {
+      // Try by accommodation_id first, then by camp_name
+      const { data: byId } = await supabase.from("employees").select("id, name, position, employee_no").eq("accommodation_id" as any, viewing.id);
+      if (byId && byId.length > 0) return byId;
+      // Fallback: manpower table
+      const { data: byName } = await (supabase as any).from("manpower").select("id, name, trade").eq("camp_name", viewing.camp_name);
+      return byName || [];
+    },
+  });
+
+  const resetForm = () => setForm({ camp_name: "", location: "", total_beds: "", occupied_beds: "", cost_per_bed: "", status: "active", contract_start: "", contract_end: "" });
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { camp_name: form.camp_name, location: form.location, total_beds: parseInt(form.total_beds) || 0, occupied_beds: parseInt(form.occupied_beds) || 0, cost_per_bed: parseFloat(form.cost_per_bed) || 0, status: form.status };
+      const payload: any = { camp_name: form.camp_name, location: form.location, total_beds: parseInt(form.total_beds) || 0, occupied_beds: parseInt(form.occupied_beds) || 0, cost_per_bed: parseFloat(form.cost_per_bed) || 0, status: form.status };
+      if (form.contract_start) payload.contract_start = form.contract_start;
+      if (form.contract_end) payload.contract_end = form.contract_end;
       if (editingId) { const { error } = await (supabase as any).from("accommodations").update(payload).eq("id", editingId); if (error) throw error; }
       else { const { error } = await (supabase as any).from("accommodations").insert(payload); if (error) throw error; }
     },
@@ -67,7 +85,7 @@ export default function Accommodation() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ camp_name: r.camp_name, location: r.location || "", total_beds: String(r.total_beds || ""), occupied_beds: String(r.occupied_beds || ""), cost_per_bed: String(r.cost_per_bed || ""), status: r.status || "active" });
+    setForm({ camp_name: r.camp_name, location: r.location || "", total_beds: String(r.total_beds || ""), occupied_beds: String(r.occupied_beds || ""), cost_per_bed: String(r.cost_per_bed || ""), status: r.status || "active", contract_start: r.contract_start ? r.contract_start.slice(0, 10) : "", contract_end: r.contract_end ? r.contract_end.slice(0, 10) : "" });
     setOpen(true);
   };
 
@@ -77,6 +95,7 @@ export default function Accommodation() {
   const overallOccupancy = totalBeds ? Math.round(totalOccupied / totalBeds * 100) : 0;
   const totalMonthlyCost = data.reduce((s: number, r: any) => s + ((r.occupied_beds || 0) * (r.cost_per_bed || 0)), 0);
   const fullCamps = data.filter((r: any) => r.total_beds > 0 && r.occupied_beds >= r.total_beds).length;
+  const overCap = data.filter((r: any) => r.total_beds > 0 && r.occupied_beds > r.total_beds).length;
   const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
 
   const filtered = data
@@ -101,8 +120,15 @@ export default function Accommodation() {
         </div>
       </div>
 
-      {/* Full Camps Alert */}
-      {fullCamps > 0 && (
+      {overCap > 0 && (
+        <Card className="border-destructive/40 bg-destructive/5">
+          <CardContent className="p-4 flex items-center gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <p className="text-sm"><span className="font-medium text-destructive">{overCap} camp{overCap > 1 ? "s" : ""} Over Capacity!</span> Immediate action required — beds exceeded.</p>
+          </CardContent>
+        </Card>
+      )}
+      {fullCamps > 0 && overCap === 0 && (
         <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20">
           <CardContent className="p-4 flex items-center gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-600 shrink-0" />
@@ -113,30 +139,21 @@ export default function Accommodation() {
 
       <div className="grid gap-3 sm:grid-cols-5">
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Beds</p>
-            <BedDouble className="h-4 w-4 text-muted-foreground" />
-          </div>
+          <div className="flex items-center justify-between"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Beds</p><BedDouble className="h-4 w-4 text-muted-foreground" /></div>
           <p className="text-2xl font-bold mt-1">{totalBeds}</p>
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Occupied</p>
-            <Users className="h-4 w-4 text-amber-500" />
-          </div>
+          <div className="flex items-center justify-between"><p className="text-xs text-muted-foreground uppercase tracking-wider">Occupied</p><Users className="h-4 w-4 text-amber-500" /></div>
           <p className="text-2xl font-bold mt-1">{totalOccupied}</p>
           <p className="text-xs text-muted-foreground mt-1">{totalAvailable} available</p>
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
           <p className="text-xs text-muted-foreground uppercase tracking-wider">Occupancy Rate</p>
           <p className={`text-2xl font-bold mt-1 ${occupancyColor(overallOccupancy)}`}>{overallOccupancy}%</p>
-          <Progress value={overallOccupancy} className={`mt-2 h-1.5 ${occupancyBarColor(overallOccupancy)}`} />
+          <Progress value={Math.min(overallOccupancy, 100)} className={`mt-2 h-1.5 ${occupancyBarColor(overallOccupancy)}`} />
         </CardContent></Card>
         <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
-          <div className="flex items-center justify-between">
-            <p className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Cost</p>
-            <DollarSign className="h-4 w-4 text-emerald-500" />
-          </div>
+          <div className="flex items-center justify-between"><p className="text-xs text-muted-foreground uppercase tracking-wider">Monthly Cost</p><DollarSign className="h-4 w-4 text-emerald-500" /></div>
           <p className="text-2xl font-bold mt-1">AED {totalMonthlyCost.toLocaleString()}</p>
           <p className="text-xs text-muted-foreground mt-1">{totalOccupied > 0 ? `AED ${Math.round(totalMonthlyCost / totalOccupied)}/person` : "—"}</p>
         </CardContent></Card>
@@ -158,33 +175,22 @@ export default function Accommodation() {
               const avail = (r.total_beds || 0) - (r.occupied_beds || 0);
               const occ = r.total_beds ? Math.round((r.occupied_beds || 0) / r.total_beds * 100) : 0;
               return (
-                <Card key={r.id} className={`hover:shadow-md transition-all group cursor-pointer ${occ >= 100 ? "border-destructive/30" : ""}`} onClick={() => { setViewing(r); setViewOpen(true); }}>
+                <Card key={r.id} className={`hover:shadow-md transition-all group cursor-pointer ${occ > 100 ? "border-destructive/40" : occ >= 100 ? "border-destructive/30" : ""}`} onClick={() => { setViewing(r); setViewOpen(true); setShowResidents(false); }}>
                   <CardContent className="p-4 space-y-3">
                     <div className="flex items-start justify-between">
-                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                        <Home className="h-5 w-5 text-primary" />
+                      <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Home className="h-5 w-5 text-primary" /></div>
+                      <div className="flex items-center gap-1">
+                        {occ > 100 && <Badge className="bg-destructive/15 text-destructive border-0 text-[10px]">Over Capacity</Badge>}
+                        <Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge>
                       </div>
-                      <Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge>
                     </div>
-                    <div>
-                      <p className="font-semibold">{r.camp_name}</p>
-                      <p className="text-sm text-muted-foreground">{r.location || "No location"}</p>
-                    </div>
+                    <div><p className="font-semibold">{r.camp_name}</p><p className="text-sm text-muted-foreground">{r.location || "No location"}</p></div>
                     <div className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-muted-foreground">Occupancy</span>
-                        <span className={`font-bold ${occupancyColor(occ)}`}>{occ}%</span>
-                      </div>
-                      <Progress value={occ} className={`h-2 ${occupancyBarColor(occ)}`} />
-                      <div className="flex justify-between text-xs text-muted-foreground">
-                        <span>{r.occupied_beds || 0} occupied</span>
-                        <span>{avail} available</span>
-                      </div>
+                      <div className="flex justify-between text-sm"><span className="text-muted-foreground">Occupancy</span><span className={`font-bold ${occupancyColor(occ)}`}>{occ}%</span></div>
+                      <Progress value={Math.min(occ, 100)} className={`h-2 ${occupancyBarColor(occ)}`} />
+                      <div className="flex justify-between text-xs text-muted-foreground"><span>{r.occupied_beds || 0} occupied</span><span>{avail} available</span></div>
                     </div>
-                    <div className="flex items-center justify-between text-sm pt-2 border-t">
-                      <span className="text-muted-foreground">Cost/bed</span>
-                      <span className="font-medium">AED {r.cost_per_bed?.toLocaleString()}</span>
-                    </div>
+                    <div className="flex items-center justify-between text-sm pt-2 border-t"><span className="text-muted-foreground">Cost/bed</span><span className="font-medium">AED {r.cost_per_bed?.toLocaleString()}</span></div>
                     <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
                       <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
@@ -195,45 +201,43 @@ export default function Accommodation() {
             })}
           </div>
         ) : (
-          <>
-            <Table><TableHeader><TableRow>
-              <SortableHeader label="Camp" sortKey="camp_name" direction={getSortDirection("camp_name")} onToggle={toggleSort} />
-              <SortableHeader label="Location" sortKey="location" direction={getSortDirection("location")} onToggle={toggleSort} />
-              <SortableHeader label="Total Beds" sortKey="total_beds" direction={getSortDirection("total_beds")} onToggle={toggleSort} />
-              <SortableHeader label="Occupied" sortKey="occupied_beds" direction={getSortDirection("occupied_beds")} onToggle={toggleSort} />
-              <SortableHeader label="Occupancy" sortKey="occupied_beds" direction={null} onToggle={() => {}} />
-              <SortableHeader label="Cost/Bed" sortKey="cost_per_bed" direction={getSortDirection("cost_per_bed")} onToggle={toggleSort} />
-              <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-              <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
-            </TableRow></TableHeader>
-              <TableBody>{pageData.map((r: any) => {
-                const avail = (r.total_beds || 0) - (r.occupied_beds || 0);
-                const occ = r.total_beds ? Math.round((r.occupied_beds || 0) / r.total_beds * 100) : 0;
-                return (
-                  <TableRow key={r.id} className={`group ${occ >= 100 ? "bg-destructive/5" : ""}`}>
-                    <TableCell className="font-medium">{r.camp_name}</TableCell>
-                    <TableCell>{r.location || "—"}</TableCell>
-                    <TableCell>{r.total_beds}</TableCell>
-                    <TableCell>{r.occupied_beds || 0} <span className="text-xs text-muted-foreground">({avail} free)</span></TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2 min-w-[100px]">
-                        <Progress value={occ} className={`h-1.5 flex-1 ${occupancyBarColor(occ)}`} />
-                        <span className={`text-xs font-bold ${occupancyColor(occ)}`}>{occ}%</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>AED {r.cost_per_bed?.toLocaleString()}</TableCell>
-                    <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}</TableBody></Table>
-          </>
+          <Table><TableHeader><TableRow>
+            <SortableHeader label="Camp" sortKey="camp_name" direction={getSortDirection("camp_name")} onToggle={toggleSort} />
+            <SortableHeader label="Location" sortKey="location" direction={getSortDirection("location")} onToggle={toggleSort} />
+            <SortableHeader label="Total Beds" sortKey="total_beds" direction={getSortDirection("total_beds")} onToggle={toggleSort} />
+            <SortableHeader label="Occupied" sortKey="occupied_beds" direction={getSortDirection("occupied_beds")} onToggle={toggleSort} />
+            <SortableHeader label="Occupancy" sortKey="occupied_beds" direction={null} onToggle={() => {}} />
+            <SortableHeader label="Cost/Bed" sortKey="cost_per_bed" direction={getSortDirection("cost_per_bed")} onToggle={toggleSort} />
+            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
+          </TableRow></TableHeader>
+            <TableBody>{pageData.map((r: any) => {
+              const avail = (r.total_beds || 0) - (r.occupied_beds || 0);
+              const occ = r.total_beds ? Math.round((r.occupied_beds || 0) / r.total_beds * 100) : 0;
+              return (
+                <TableRow key={r.id} className={`group ${occ > 100 ? "bg-destructive/5" : ""}`}>
+                  <TableCell className="font-medium">{r.camp_name}</TableCell>
+                  <TableCell>{r.location || "—"}</TableCell>
+                  <TableCell>{r.total_beds}</TableCell>
+                  <TableCell>{r.occupied_beds || 0} <span className="text-xs text-muted-foreground">({avail} free)</span>{occ > 100 && <Badge className="ml-1 bg-destructive/15 text-destructive border-0 text-[10px]">Over Cap</Badge>}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 min-w-[100px]">
+                      <Progress value={Math.min(occ, 100)} className={`h-1.5 flex-1 ${occupancyBarColor(occ)}`} />
+                      <span className={`text-xs font-bold ${occupancyColor(occ)}`}>{occ}%</span>
+                    </div>
+                  </TableCell>
+                  <TableCell>AED {r.cost_per_bed?.toLocaleString()}</TableCell>
+                  <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); setShowResidents(false); }}><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}</TableBody></Table>
         )}
         <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
       </CardContent></Card>
@@ -245,23 +249,20 @@ export default function Accommodation() {
           const avail = (viewing.total_beds || 0) - (viewing.occupied_beds || 0);
           const occ = viewing.total_beds ? Math.round((viewing.occupied_beds || 0) / viewing.total_beds * 100) : 0;
           const monthlyCost = (viewing.occupied_beds || 0) * (viewing.cost_per_bed || 0);
+          const overCapacity = viewing.total_beds > 0 && viewing.occupied_beds > viewing.total_beds;
           return (
             <div className="space-y-4">
               <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Home className="h-6 w-6 text-primary" />
-                </div>
+                <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center"><Home className="h-6 w-6 text-primary" /></div>
                 <div>
                   <p className="font-semibold text-lg">{viewing.camp_name}</p>
                   <p className="text-sm text-muted-foreground">{viewing.location || "No location"}</p>
                 </div>
               </div>
+              {overCapacity && <div className="flex items-center gap-2 p-3 bg-destructive/10 rounded-lg"><AlertTriangle className="h-4 w-4 text-destructive" /><p className="text-sm font-medium text-destructive">Over Capacity! ({viewing.occupied_beds}/{viewing.total_beds} beds)</p></div>}
               <div className="bg-muted/50 rounded-lg p-4 space-y-3">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Occupancy</span>
-                  <span className={`text-lg font-bold ${occupancyColor(occ)}`}>{occ}%</span>
-                </div>
-                <Progress value={occ} className={`h-2.5 ${occupancyBarColor(occ)}`} />
+                <div className="flex justify-between items-center"><span className="text-sm">Occupancy</span><span className={`text-lg font-bold ${occupancyColor(occ)}`}>{occ}%</span></div>
+                <Progress value={Math.min(occ, 100)} className={`h-2.5 ${occupancyBarColor(occ)}`} />
                 <div className="grid grid-cols-3 gap-2 text-center text-sm">
                   <div><p className="text-muted-foreground text-xs">Total</p><p className="font-bold">{viewing.total_beds}</p></div>
                   <div><p className="text-muted-foreground text-xs">Occupied</p><p className="font-bold text-amber-600">{viewing.occupied_beds || 0}</p></div>
@@ -270,9 +271,28 @@ export default function Accommodation() {
               </div>
               <div className="grid grid-cols-2 gap-3 text-sm">
                 <div><p className="text-muted-foreground text-xs">Cost Per Bed</p><p className="font-medium">AED {viewing.cost_per_bed?.toLocaleString()}</p></div>
-                <div><p className="text-muted-foreground text-xs">Monthly Cost</p><p className="font-medium">AED {monthlyCost.toLocaleString()}</p></div>
+                <div>
+                  <p className="text-muted-foreground text-xs">Monthly Total Cost</p>
+                  <p className="font-bold text-lg text-emerald-600">AED {monthlyCost.toLocaleString()}</p>
+                </div>
                 <div><p className="text-muted-foreground text-xs">Status</p><Badge variant={viewing.status === "active" ? "default" : "secondary"}>{viewing.status}</Badge></div>
+                {viewing.contract_start && <div><p className="text-muted-foreground text-xs">Contract Start</p><p className="font-medium text-xs">{format(new Date(viewing.contract_start), "dd MMM yyyy")}</p></div>}
+                {viewing.contract_end && <div><p className="text-muted-foreground text-xs">Contract End</p><p className="font-medium text-xs">{format(new Date(viewing.contract_end), "dd MMM yyyy")}</p></div>}
               </div>
+              <Button size="sm" variant="outline" className="w-full gap-2" onClick={() => setShowResidents(!showResidents)}>
+                <UserCheck className="h-4 w-4" />{showResidents ? "Hide" : "View"} Residents
+              </Button>
+              {showResidents && (
+                <div className="space-y-2 pt-1">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Residents</p>
+                  {residents.length === 0 ? <p className="text-xs text-muted-foreground">No residents found</p> : residents.map((r: any) => (
+                    <div key={r.id} className="flex items-center gap-2 py-1.5 border-b last:border-0 text-sm">
+                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold">{r.name?.charAt(0)}</div>
+                      <div><p className="font-medium text-xs">{r.name}</p><p className="text-[10px] text-muted-foreground">{r.position || r.trade || "—"}</p></div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })()}
@@ -288,6 +308,10 @@ export default function Accommodation() {
             <div><Label>Total Beds</Label><Input type="number" value={form.total_beds} onChange={e => setForm({ ...form, total_beds: e.target.value })} /></div>
             <div><Label>Occupied</Label><Input type="number" value={form.occupied_beds} onChange={e => setForm({ ...form, occupied_beds: e.target.value })} /></div>
             <div><Label>Cost/Bed (AED)</Label><Input type="number" value={form.cost_per_bed} onChange={e => setForm({ ...form, cost_per_bed: e.target.value })} /></div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Contract Start</Label><Input type="date" value={form.contract_start} onChange={e => setForm({ ...form, contract_start: e.target.value })} /></div>
+            <div><Label>Contract End</Label><Input type="date" value={form.contract_end} onChange={e => setForm({ ...form, contract_end: e.target.value })} /></div>
           </div>
           <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="active">Active</SelectItem><SelectItem value="inactive">Inactive</SelectItem><SelectItem value="maintenance">Maintenance</SelectItem></SelectContent></Select></div>
           <Button className="w-full" onClick={() => save.mutate()} disabled={!form.camp_name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Add Camp"}</Button>
