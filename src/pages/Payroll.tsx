@@ -6,10 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
+import { Progress } from "@/components/ui/progress";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, Wallet, Pencil, Trash2, Eye } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -18,10 +20,13 @@ import { ExportButton } from "@/components/ExportButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { StatusFilter } from "@/components/StatusFilter";
 
+const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
 export default function Payroll() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [viewItem, setViewItem] = useState<any>(null);
@@ -40,6 +45,7 @@ export default function Payroll() {
     const b = parseFloat(f.basic_salary) || 0, h = parseFloat(f.housing_allowance) || 0, t = parseFloat(f.transport_allowance) || 0, fo = parseFloat(f.food_allowance) || 0, ot = parseFloat(f.overtime_pay) || 0, d = parseFloat(f.deductions) || 0;
     return b + h + t + fo + ot - d;
   };
+  const calcAllowances = (f: typeof form) => (parseFloat(f.housing_allowance) || 0) + (parseFloat(f.transport_allowance) || 0) + (parseFloat(f.food_allowance) || 0);
 
   const save = useMutation({
     mutationFn: async () => {
@@ -69,38 +75,142 @@ export default function Payroll() {
 
   const totalNet = data.reduce((s: number, r: any) => s + (r.net_pay || 0), 0);
   const totalBasic = data.reduce((s: number, r: any) => s + (r.basic_salary || 0), 0);
-  const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+  const totalAllowances = data.reduce((s: number, r: any) => s + (r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0), 0);
+  const totalDeductions = data.reduce((s: number, r: any) => s + (r.deductions || 0), 0);
+  const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {} as Record<string, number>);
+  const paidCount = statusCounts.paid || 0;
+  const paidRate = data.length > 0 ? Math.round((paidCount / data.length) * 100) : 0;
 
   const filtered = data
     .filter((r: any) => JSON.stringify(r).toLowerCase().includes(search.toLowerCase()))
     .filter((r: any) => statusFilter === "all" || r.status === statusFilter);
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
-  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3"><Wallet className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Payroll</h1></div>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3"><Wallet className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Payroll</h1><p className="text-sm text-muted-foreground">{data.length} records</p></div></div>
         <div className="flex gap-2">
           <ExportButton data={data} filename="payroll" />
-          <Button onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Payroll</Button>
+          <Button size="sm" className="h-9" onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Payroll</Button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Records</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Basic</p><p className="text-2xl font-semibold mt-1">AED {totalBasic.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Net Pay</p><p className="text-2xl font-semibold mt-1 text-primary">AED {totalNet.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Paid</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts.paid || 0}</p></CardContent></Card>
+      {/* Enhanced KPIs */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Net Payroll</p>
+                <p className="text-2xl font-bold mt-1">AED {totalNet.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <DollarSign className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Basic Salaries</p>
+            <p className="text-2xl font-bold mt-1">AED {totalBasic.toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">{totalNet > 0 ? Math.round((totalBasic / totalNet) * 100) : 0}% of net</p>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Allowances</p>
+                <p className="text-2xl font-bold mt-1 text-success">AED {totalAllowances.toLocaleString()}</p>
+              </div>
+              <ArrowUpRight className="h-5 w-5 text-success" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Deductions</p>
+                <p className="text-2xl font-bold mt-1 text-destructive">AED {totalDeductions.toLocaleString()}</p>
+              </div>
+              <ArrowDownRight className="h-5 w-5 text-destructive" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Paid Status</p>
+            <p className="text-2xl font-bold mt-1">{paidCount}/{data.length}</p>
+            <Progress value={paidRate} className="mt-2 h-1.5" />
+          </CardContent>
+        </Card>
       </div>
 
-      <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"draft",label:"Draft",count:statusCounts.draft||0},{value:"processed",label:"Processed",count:statusCounts.processed||0},{value:"paid",label:"Paid",count:statusCounts.paid||0}]} selected={statusFilter} onSelect={setStatusFilter} />
+      <div className="flex flex-col sm:flex-row gap-3">
+        <StatusFilter statuses={[{ value: "all", label: "All", count: data.length }, { value: "draft", label: "Draft", count: statusCounts.draft || 0 }, { value: "processed", label: "Processed", count: statusCounts.processed || 0 }, { value: "paid", label: "Paid", count: statusCounts.paid || 0 }]} selected={statusFilter} onSelect={setStatusFilter} />
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="relative"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9 h-9 w-64" /></div>
+          <div className="flex border rounded-md">
+            <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === "cards" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-l-none" onClick={() => setViewMode("cards")}><LayoutGrid className="h-4 w-4" /></Button>
+          </div>
+        </div>
+      </div>
 
-      <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
-        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No payroll records</p> : (
-          <>
+      {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <Card><CardContent className="py-8 text-center text-muted-foreground">No payroll records</CardContent></Card> : viewMode === "cards" ? (
+        <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {pageData.map((r: any) => {
+            const allowances = (r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0);
+            return (
+              <Card key={r.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
+                <CardContent className="p-4">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-9 w-9 rounded-full bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
+                        {r.employees?.name ? getInitials(r.employees.name) : "?"}
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-sm">{r.employees?.name || "Unknown"}</h3>
+                        <p className="text-xs text-muted-foreground">{months[(r.month || 1) - 1]} {r.year}</p>
+                      </div>
+                    </div>
+                    <Badge variant={r.status === "paid" ? "default" : "secondary"} className="text-[10px]">{r.status}</Badge>
+                  </div>
+                  <div className="text-2xl font-bold">AED {r.net_pay?.toLocaleString()}</div>
+                  <div className="grid grid-cols-3 gap-2 mt-3 text-[10px]">
+                    <div className="p-1.5 bg-muted rounded text-center">
+                      <p className="text-muted-foreground">Basic</p>
+                      <p className="font-semibold">{r.basic_salary?.toLocaleString()}</p>
+                    </div>
+                    <div className="p-1.5 bg-success/10 rounded text-center">
+                      <p className="text-muted-foreground">Allowances</p>
+                      <p className="font-semibold text-success">{allowances.toLocaleString()}</p>
+                    </div>
+                    <div className="p-1.5 bg-destructive/10 rounded text-center">
+                      <p className="text-muted-foreground">Deductions</p>
+                      <p className="font-semibold text-destructive">{r.deductions?.toLocaleString()}</p>
+                    </div>
+                  </div>
+                  <div className="flex gap-1 mt-3 pt-2 border-t justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => setViewItem(r)}><Eye className="h-3 w-3 mr-1" />View</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+        <div className="mt-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
+        </>
+      ) : (
+        <Card><CardContent className="pt-6">
           <Table><TableHeader><TableRow>
             <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
             <SortableHeader label="Period" sortKey="month" direction={getSortDirection("month")} onToggle={toggleSort} />
@@ -110,71 +220,96 @@ export default function Payroll() {
             <SortableHeader label="Deductions" sortKey="deductions" direction={getSortDirection("deductions")} onToggle={toggleSort} />
             <SortableHeader label="Net Pay" sortKey="net_pay" direction={getSortDirection("net_pay")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
+            <TableHead>Actions</TableHead>
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.employees?.name || "—"}</TableCell>
+              <TableRow key={r.id} className="group">
+                <TableCell>
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center text-[10px] font-bold text-primary shrink-0">
+                      {r.employees?.name ? getInitials(r.employees.name) : "?"}
+                    </div>
+                    <span className="font-medium">{r.employees?.name || "—"}</span>
+                  </div>
+                </TableCell>
                 <TableCell>{months[(r.month || 1) - 1]} {r.year}</TableCell>
                 <TableCell>{r.basic_salary?.toLocaleString()}</TableCell>
-                <TableCell>{((r.housing_allowance||0)+(r.transport_allowance||0)+(r.food_allowance||0)).toLocaleString()}</TableCell>
+                <TableCell className="text-success">{((r.housing_allowance || 0) + (r.transport_allowance || 0) + (r.food_allowance || 0)).toLocaleString()}</TableCell>
                 <TableCell className="text-success">{r.overtime_pay?.toLocaleString() || 0}</TableCell>
                 <TableCell className="text-destructive">{r.deductions?.toLocaleString()}</TableCell>
                 <TableCell className="font-bold">AED {r.net_pay?.toLocaleString()}</TableCell>
-                <TableCell><Badge variant={r.status === "paid" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+                <TableCell><Badge variant={r.status === "paid" ? "default" : "secondary"} className="text-[10px]">{r.status}</Badge></TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => setViewItem(r)}><Eye className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewItem(r)}><Eye className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                    <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
                 </TableCell>
               </TableRow>
             ))}</TableBody></Table>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
-          </>
-        )}
-      </CardContent></Card>
+        </CardContent></Card>
+      )}
 
+      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent className="max-w-lg">
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Payroll Record</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div><Label>Employee</Label><Select value={form.employee_id} onValueChange={v => setForm({...form, employee_id: v})}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
+          <div><Label>Employee</Label><Select value={form.employee_id} onValueChange={v => setForm({ ...form, employee_id: v })}><SelectTrigger><SelectValue placeholder="Select" /></SelectTrigger><SelectContent>{employees.map((e: any) => <SelectItem key={e.id} value={e.id}>{e.name}</SelectItem>)}</SelectContent></Select></div>
           <div className="grid grid-cols-3 gap-3">
-            <div><Label>Month</Label><Input type="number" min="1" max="12" value={form.month} onChange={e => setForm({...form, month: e.target.value})} /></div>
-            <div><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({...form, year: e.target.value})} /></div>
-            <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({...form, status: v})}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="processed">Processed</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent></Select></div>
+            <div><Label>Month</Label><Select value={form.month} onValueChange={v => setForm({ ...form, month: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{months.map((m, i) => <SelectItem key={i} value={String(i + 1)}>{m}</SelectItem>)}</SelectContent></Select></div>
+            <div><Label>Year</Label><Input type="number" value={form.year} onChange={e => setForm({ ...form, year: e.target.value })} /></div>
+            <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="processed">Processed</SelectItem><SelectItem value="paid">Paid</SelectItem></SelectContent></Select></div>
           </div>
-          <div><Label>Basic Salary</Label><Input type="number" value={form.basic_salary} onChange={e => setForm({...form, basic_salary: e.target.value})} /></div>
+          <div><Label>Basic Salary</Label><Input type="number" value={form.basic_salary} onChange={e => setForm({ ...form, basic_salary: e.target.value })} /></div>
           <div className="grid grid-cols-3 gap-2">
-            <div><Label>Housing</Label><Input type="number" value={form.housing_allowance} onChange={e => setForm({...form, housing_allowance: e.target.value})} /></div>
-            <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e => setForm({...form, transport_allowance: e.target.value})} /></div>
-            <div><Label>Food</Label><Input type="number" value={form.food_allowance} onChange={e => setForm({...form, food_allowance: e.target.value})} /></div>
+            <div><Label>Housing</Label><Input type="number" value={form.housing_allowance} onChange={e => setForm({ ...form, housing_allowance: e.target.value })} /></div>
+            <div><Label>Transport</Label><Input type="number" value={form.transport_allowance} onChange={e => setForm({ ...form, transport_allowance: e.target.value })} /></div>
+            <div><Label>Food</Label><Input type="number" value={form.food_allowance} onChange={e => setForm({ ...form, food_allowance: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Overtime Pay</Label><Input type="number" value={form.overtime_pay} onChange={e => setForm({...form, overtime_pay: e.target.value})} /></div>
-            <div><Label>Deductions</Label><Input type="number" value={form.deductions} onChange={e => setForm({...form, deductions: e.target.value})} /></div>
+            <div><Label>Overtime Pay</Label><Input type="number" value={form.overtime_pay} onChange={e => setForm({ ...form, overtime_pay: e.target.value })} /></div>
+            <div><Label>Deductions</Label><Input type="number" value={form.deductions} onChange={e => setForm({ ...form, deductions: e.target.value })} /></div>
           </div>
-          <div className="p-3 bg-muted rounded-lg text-sm">Net Pay: <strong>AED {calcNet(form).toLocaleString()}</strong></div>
-          <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
+          <div className="p-3 bg-muted rounded-lg space-y-1.5 text-sm">
+            <div className="flex justify-between text-xs"><span className="text-muted-foreground">Basic</span><span>{(parseFloat(form.basic_salary) || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between text-xs text-success"><span>+ Allowances</span><span>{calcAllowances(form).toLocaleString()}</span></div>
+            <div className="flex justify-between text-xs text-success"><span>+ Overtime</span><span>{(parseFloat(form.overtime_pay) || 0).toLocaleString()}</span></div>
+            <div className="flex justify-between text-xs text-destructive"><span>- Deductions</span><span>{(parseFloat(form.deductions) || 0).toLocaleString()}</span></div>
+            <Separator />
+            <div className="flex justify-between font-bold"><span>Net Pay</span><span>AED {calcNet(form).toLocaleString()}</span></div>
+          </div>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Save"}</Button>
         </div>
       </DialogContent></Dialog>
 
+      {/* Enhanced View Dialog */}
       <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent>
-        <DialogHeader><DialogTitle>Payroll Details</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Payslip Details</DialogTitle></DialogHeader>
         {viewItem && (
-          <div className="space-y-3 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              <div><span className="text-muted-foreground">Employee:</span> {viewItem.employees?.name || "—"}</div>
-              <div><span className="text-muted-foreground">Period:</span> {months[(viewItem.month||1)-1]} {viewItem.year}</div>
-              <div><span className="text-muted-foreground">Basic:</span> AED {viewItem.basic_salary?.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Housing:</span> AED {viewItem.housing_allowance?.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Transport:</span> AED {viewItem.transport_allowance?.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Food:</span> AED {viewItem.food_allowance?.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Overtime:</span> AED {viewItem.overtime_pay?.toLocaleString()}</div>
-              <div><span className="text-muted-foreground">Deductions:</span> AED {viewItem.deductions?.toLocaleString()}</div>
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 pb-3 border-b">
+              <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold text-primary">
+                {viewItem.employees?.name ? getInitials(viewItem.employees.name) : "?"}
+              </div>
+              <div>
+                <h3 className="font-semibold">{viewItem.employees?.name || "Unknown"}</h3>
+                <p className="text-sm text-muted-foreground">{months[(viewItem.month || 1) - 1]} {viewItem.year}</p>
+              </div>
+              <Badge variant={viewItem.status === "paid" ? "default" : "secondary"} className="ml-auto">{viewItem.status}</Badge>
             </div>
-            <div className="p-3 bg-muted rounded-lg font-semibold">Net Pay: AED {viewItem.net_pay?.toLocaleString()}</div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between"><span className="text-muted-foreground">Basic Salary</span><span>AED {viewItem.basic_salary?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Housing Allowance</span><span className="text-success">AED {viewItem.housing_allowance?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Transport Allowance</span><span className="text-success">AED {viewItem.transport_allowance?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Food Allowance</span><span className="text-success">AED {viewItem.food_allowance?.toLocaleString()}</span></div>
+              <div className="flex justify-between"><span className="text-muted-foreground">Overtime Pay</span><span className="text-success">AED {viewItem.overtime_pay?.toLocaleString()}</span></div>
+              <Separator />
+              <div className="flex justify-between"><span className="text-muted-foreground">Deductions</span><span className="text-destructive">- AED {viewItem.deductions?.toLocaleString()}</span></div>
+              <Separator />
+              <div className="flex justify-between text-lg font-bold"><span>Net Pay</span><span>AED {viewItem.net_pay?.toLocaleString()}</span></div>
+            </div>
           </div>
         )}
       </DialogContent></Dialog>
