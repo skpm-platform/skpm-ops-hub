@@ -63,7 +63,7 @@ export default function ApprovalCenter() {
       }
       const { error } = await supabase.from(table as any).update(updateData).eq("id", id);
       if (error) throw error;
-      await logAudit(user?.id || "", `${action === "approve" ? "Approved" : "Rejected"} ${table.replace("_", " ")}`, table, id);
+      await logAudit(`${action === "approve" ? "Approved" : "Rejected"} ${table.replace("_", " ")}`, `Record ID: ${id}`, table);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["approval-leaves"] });
