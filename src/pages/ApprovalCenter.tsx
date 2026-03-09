@@ -287,8 +287,7 @@ export default function ApprovalCenter() {
             approveMutation.mutate({ table: confirmAction.table, id: confirmAction.id, action: confirmAction.action });
           }
         }}
-        confirmText={confirmAction?.action === "approve" ? "Approve" : "Reject"}
-        variant={confirmAction?.action === "reject" ? "destructive" : "default"}
+        destructive={confirmAction?.action === "reject"}
       />
     </div>
   );
