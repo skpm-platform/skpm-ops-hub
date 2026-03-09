@@ -554,6 +554,3 @@ export default function Dashboard() {
     </div>
   );
 }
-
-// Need to import FolderKanban for quick actions
-import { FolderKanban } from "lucide-react";
