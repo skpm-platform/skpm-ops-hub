@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, GraduationCap, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, GraduationCap, Pencil, Trash2, Eye, LayoutGrid, List, ShieldCheck, Zap, BookOpen, HeartPulse, UserCheck, Award } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -19,6 +20,7 @@ import { StatusFilter } from "@/components/StatusFilter";
 import { ComboboxSelect } from "@/components/ComboboxSelect";
 
 const statusColors: Record<string, string> = { scheduled: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", in_progress: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", completed: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", cancelled: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+const typeIcons: Record<string, any> = { safety: ShieldCheck, technical: Zap, soft_skills: BookOpen, compliance: Award, induction: UserCheck, first_aid: HeartPulse };
 
 export default function Training() {
   const qc = useQueryClient();
@@ -27,6 +29,8 @@ export default function Training() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewItem, setViewItem] = useState<any>(null);
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [form, setForm] = useState({ title: "", type: "safety", date: "", duration: "", trainer: "", venue: "", status: "scheduled" });
 
   const { data = [], isLoading } = useQuery({
@@ -58,6 +62,7 @@ export default function Training() {
   };
 
   const statusCounts = data.reduce((a: Record<string, number>, r: any) => { a[r.status] = (a[r.status] || 0) + 1; return a; }, {});
+  const completionRate = data.length > 0 ? Math.round(((statusCounts.completed || 0) / data.length) * 100) : 0;
 
   const filtered = data
     .filter((r: any) => r.title?.toLowerCase().includes(search.toLowerCase()) || r.trainer?.toLowerCase().includes(search.toLowerCase()))
@@ -65,28 +70,81 @@ export default function Training() {
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3"><GraduationCap className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Training</h1></div>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><GraduationCap className="h-5 w-5 text-primary" /></div>
+          <div><h1 className="text-2xl font-bold">Training</h1><p className="text-sm text-muted-foreground">{data.length} programs</p></div>
+        </div>
         <div className="flex gap-2">
+          <div className="flex border rounded-lg overflow-hidden">
+            <Button variant={viewMode === "table" ? "default" : "ghost"} size="sm" className="h-9 rounded-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === "grid" ? "default" : "ghost"} size="sm" className="h-9 rounded-none" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
+          </div>
           <ExportButton data={data} filename="training" />
           <Button onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Training</Button>
         </div>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Programs</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Scheduled</p><p className="text-2xl font-semibold mt-1">{statusCounts.scheduled || 0}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">In Progress</p><p className="text-2xl font-semibold mt-1 text-warning">{statusCounts.in_progress || 0}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Completed</p><p className="text-2xl font-semibold mt-1 text-success">{statusCounts.completed || 0}</p></CardContent></Card>
+        <Card className="group hover:shadow-md transition-all"><CardContent className="p-4">
+          <div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Programs</p><p className="text-2xl font-bold mt-1">{data.length}</p></div>
+          <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center group-hover:scale-110 transition-transform"><GraduationCap className="h-4 w-4 text-primary" /></div></div>
+        </CardContent></Card>
+        <Card className="group hover:shadow-md transition-all"><CardContent className="p-4">
+          <div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Scheduled</p><p className="text-2xl font-bold mt-1 text-blue-600">{statusCounts.scheduled || 0}</p></div>
+          <div className="h-9 w-9 rounded-lg bg-blue-500/10 flex items-center justify-center group-hover:scale-110 transition-transform"><BookOpen className="h-4 w-4 text-blue-600" /></div></div>
+        </CardContent></Card>
+        <Card className="group hover:shadow-md transition-all"><CardContent className="p-4">
+          <div className="flex items-center justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">In Progress</p><p className="text-2xl font-bold mt-1 text-warning">{statusCounts.in_progress || 0}</p></div>
+          <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center group-hover:scale-110 transition-transform"><Zap className="h-4 w-4 text-warning" /></div></div>
+        </CardContent></Card>
+        <Card className="group hover:shadow-md transition-all"><CardContent className="p-4">
+          <p className="text-xs text-muted-foreground uppercase tracking-wider">Completion Rate</p>
+          <p className="text-2xl font-bold mt-1 text-success">{completionRate}%</p>
+          <Progress value={completionRate} className="h-1.5 mt-2" />
+        </CardContent></Card>
       </div>
 
       <StatusFilter statuses={[{value:"all",label:"All",count:data.length},{value:"scheduled",label:"Scheduled",count:statusCounts.scheduled||0},{value:"in_progress",label:"In Progress",count:statusCounts.in_progress||0},{value:"completed",label:"Completed",count:statusCounts.completed||0},{value:"cancelled",label:"Cancelled",count:statusCounts.cancelled||0}]} selected={statusFilter} onSelect={setStatusFilter} />
 
-      <Card><CardContent className="pt-6">
-        <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search training..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
-        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No training programs</p> : (
-          <>
+      <div className="relative max-w-sm"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search training..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+
+      {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No training programs</p> : viewMode === "grid" ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {filtered.map((r: any) => {
+            const TypeIcon = typeIcons[r.type] || GraduationCap;
+            return (
+              <Card key={r.id} className="group hover:shadow-lg transition-all border hover:border-primary/20 overflow-hidden">
+                <CardContent className="p-0">
+                  <div className={`h-1 ${r.status === "completed" ? "bg-success" : r.status === "in_progress" ? "bg-warning" : r.status === "cancelled" ? "bg-destructive" : "bg-blue-500"}`} />
+                  <div className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <div className="flex items-start gap-3">
+                        <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0"><TypeIcon className="h-4 w-4 text-primary" /></div>
+                        <div className="min-w-0">
+                          <h3 className="font-semibold text-sm truncate">{r.title}</h3>
+                          <p className="text-[11px] text-muted-foreground capitalize">{r.type?.replace("_", " ")}</p>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className={`border-0 text-[10px] ${statusColors[r.status] || ""}`}>{r.status}</Badge>
+                    </div>
+                    {r.trainer && <p className="text-xs text-muted-foreground">Trainer: <span className="font-medium text-foreground">{r.trainer}</span></p>}
+                    {r.date && <p className="text-xs text-muted-foreground">Date: {r.date}</p>}
+                    {r.venue && <p className="text-xs text-muted-foreground">Venue: {r.venue}</p>}
+                    <div className="flex gap-1 pt-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setViewItem(r)}><Eye className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      ) : (
+        <Card><CardContent className="pt-6">
           <Table><TableHeader><TableRow>
             <SortableHeader label="Title" sortKey="title" direction={getSortDirection("title")} onToggle={toggleSort} />
             <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
@@ -96,26 +154,43 @@ export default function Training() {
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
-            <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}>
-                <TableCell className="font-medium">{r.title}</TableCell>
-                <TableCell><Badge variant="outline">{r.type}</Badge></TableCell>
-                <TableCell>{r.date || "—"}</TableCell>
-                <TableCell>{r.trainer || "—"}</TableCell>
-                <TableCell>{r.venue || "—"}</TableCell>
-                <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}</TableBody></Table>
+            <TableBody>{pageData.map((r: any) => {
+              const TypeIcon = typeIcons[r.type] || GraduationCap;
+              return (
+                <TableRow key={r.id}>
+                  <TableCell className="font-medium">{r.title}</TableCell>
+                  <TableCell><div className="flex items-center gap-1.5"><TypeIcon className="h-3.5 w-3.5 text-muted-foreground" /><Badge variant="outline" className="capitalize">{r.type?.replace("_"," ")}</Badge></div></TableCell>
+                  <TableCell>{r.date || "—"}</TableCell>
+                  <TableCell>{r.trainer || "—"}</TableCell>
+                  <TableCell>{r.venue || "—"}</TableCell>
+                  <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
+                  <TableCell>
+                    <div className="flex gap-1">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewItem(r)}><Eye className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              );
+            })}</TableBody></Table>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
-          </>
+        </CardContent></Card>
+      )}
+
+      {/* View Dialog */}
+      <Dialog open={!!viewItem} onOpenChange={() => setViewItem(null)}><DialogContent>
+        <DialogHeader><DialogTitle>{viewItem?.title}</DialogTitle></DialogHeader>
+        {viewItem && (
+          <div className="space-y-3 text-sm">
+            <div className="grid grid-cols-2 gap-3">
+              {[["Type",viewItem.type],["Date",viewItem.date],["Duration",viewItem.duration],["Trainer",viewItem.trainer],["Venue",viewItem.venue],["Status",viewItem.status]].map(([l,v])=>(
+                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
+              ))}
+            </div>
+          </div>
         )}
-      </CardContent></Card>
+      </DialogContent></Dialog>
 
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent>
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Training Program</DialogTitle></DialogHeader>
