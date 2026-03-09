@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Users, Pencil, Trash2, Eye } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Plus, Search, Users, Pencil, Trash2, Eye, LayoutGrid, List, AlertTriangle, Shield, Briefcase, UserCheck } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -21,6 +22,7 @@ import { ExportButton } from "@/components/ExportButton";
 import { CSVImportButton } from "@/components/CSVImportButton";
 import { BulkActions, useBulkSelect } from "@/components/BulkActions";
 import { Checkbox } from "@/components/ui/checkbox";
+import { format, differenceInDays } from "date-fns";
 
 const positionOptions = [
   { value: "Electrician", label: "Electrician" }, { value: "Plumber", label: "Plumber" },
@@ -47,6 +49,7 @@ export default function Employees() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
   const [deleteId, setDeleteId] = useState<string | null>(null);
@@ -140,8 +143,39 @@ export default function Employees() {
     qc.invalidateQueries({ queryKey: ["employees"] });
   };
 
+  // Derived stats
+  const activeCount = data.filter((r: any) => r.status === "active").length;
+  const visaExpiringCount = data.filter((r: any) => r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now() + 30 * 86400000)).length;
+  const visaExpiringSoon = data.filter((r: any) => {
+    if (!r.visa_expiry) return false;
+    const days = differenceInDays(new Date(r.visa_expiry), new Date());
+    return days >= 0 && days <= 60;
+  }).sort((a: any, b: any) => new Date(a.visa_expiry).getTime() - new Date(b.visa_expiry).getTime());
+  const totalSalary = data.reduce((s: number, r: any) => s + (r.salary || 0), 0);
+  const avgSalary = data.length ? Math.round(totalSalary / data.length) : 0;
+
+  // Position distribution
+  const positionCounts: Record<string, number> = {};
+  data.forEach((r: any) => { if (r.position) positionCounts[r.position] = (positionCounts[r.position] || 0) + 1; });
+  const topPositions = Object.entries(positionCounts).sort(([, a], [, b]) => b - a).slice(0, 5);
+
+  const getVisaBadge = (visaExpiry: string | null) => {
+    if (!visaExpiry) return null;
+    const days = differenceInDays(new Date(visaExpiry), new Date());
+    if (days < 0) return <Badge variant="destructive" className="text-[10px] px-1.5">Expired</Badge>;
+    if (days <= 30) return <Badge variant="destructive" className="text-[10px] px-1.5 animate-pulse">{days}d left</Badge>;
+    if (days <= 60) return <Badge className="text-[10px] px-1.5 bg-warning/15 text-warning border-0">{days}d left</Badge>;
+    return null;
+  };
+
+  const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  const getAvatarColor = (name: string) => {
+    const colors = ["bg-primary/15 text-primary", "bg-accent text-accent-foreground", "bg-destructive/15 text-destructive", "bg-warning/15 text-warning", "bg-success/15 text-success"];
+    return colors[name.charCodeAt(0) % colors.length];
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Users className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Employees</h1><p className="text-sm text-muted-foreground">{data.length} total employees</p></div></div>
         <div className="flex gap-2">
@@ -151,60 +185,196 @@ export default function Employees() {
         </div>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total</p><p className="text-2xl font-bold">{data.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Active</p><p className="text-2xl font-bold text-success">{data.filter((r:any)=>r.status==="active").length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Visa Expiring</p><p className="text-2xl font-bold text-destructive">{data.filter((r:any)=>r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now()+30*86400000)).length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Salary</p><p className="text-2xl font-bold">AED {data.reduce((s:number,r:any)=>s+(r.salary||0),0).toLocaleString()}</p></CardContent></Card>
+      {/* Enhanced KPI Cards */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Card className="group hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Employees</p>
+                <p className="text-2xl font-bold mt-1">{data.length}</p>
+                <p className="text-xs text-muted-foreground mt-1">{activeCount} active · {data.length - activeCount} inactive</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
+                <Users className="h-5 w-5 text-primary" />
+              </div>
+            </div>
+            {data.length > 0 && <Progress value={(activeCount / data.length) * 100} className="mt-3 h-1.5" />}
+          </CardContent>
+        </Card>
+        <Card className="group hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Visa Alerts</p>
+                <p className="text-2xl font-bold text-destructive mt-1">{visaExpiringCount}</p>
+                <p className="text-xs text-muted-foreground mt-1">Expiring within 30 days</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-destructive/10 flex items-center justify-center">
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="group hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Avg Salary</p>
+                <p className="text-2xl font-bold mt-1">AED {avgSalary.toLocaleString()}</p>
+                <p className="text-xs text-muted-foreground mt-1">Total: AED {totalSalary.toLocaleString()}</p>
+              </div>
+              <div className="h-10 w-10 rounded-full bg-accent flex items-center justify-center">
+                <Briefcase className="h-5 w-5 text-accent-foreground" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="group hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-2">Top Positions</p>
+            <div className="space-y-1.5">
+              {topPositions.length === 0 && <p className="text-xs text-muted-foreground">No data</p>}
+              {topPositions.map(([pos, count]) => (
+                <div key={pos} className="flex items-center justify-between text-xs">
+                  <span className="truncate">{pos}</span>
+                  <Badge variant="secondary" className="text-[10px] h-5">{count}</Badge>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Visa Expiry Alerts Banner */}
+      {visaExpiringSoon.length > 0 && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <Shield className="h-4 w-4 text-warning" />
+              <span className="text-sm font-semibold">Visa Expiry Alerts ({visaExpiringSoon.length})</span>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {visaExpiringSoon.slice(0, 8).map((emp: any) => {
+                const days = differenceInDays(new Date(emp.visa_expiry), new Date());
+                return (
+                  <div key={emp.id} className="flex items-center gap-1.5 bg-background rounded-full px-3 py-1 text-xs border">
+                    <span className="font-medium">{emp.name}</span>
+                    <Badge variant={days <= 30 ? "destructive" : "secondary"} className="text-[10px] px-1.5 h-4">{days < 0 ? "Expired" : `${days}d`}</Badge>
+                  </div>
+                );
+              })}
+              {visaExpiringSoon.length > 8 && <span className="text-xs text-muted-foreground self-center">+{visaExpiringSoon.length - 8} more</span>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       <Card><CardContent className="pt-6">
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by name, ID, position..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
           <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
+          <div className="flex border rounded-md">
+            <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-l-none" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
+          </div>
         </div>
-        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No employees found</p> : (
+
+        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No employees found</p> : viewMode === "grid" ? (
+          /* Grid View */
+          <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {pageData.map((r: any) => (
+              <Card key={r.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className={`h-10 w-10 rounded-full flex items-center justify-center text-sm font-bold shrink-0 ${getAvatarColor(r.name || "")}`}>
+                      {getInitials(r.name || "?")}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <h3 className="font-semibold text-sm truncate">{r.name}</h3>
+                        <Badge variant={r.status === "active" ? "default" : "secondary"} className="text-[10px] shrink-0">{r.status}</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground">{r.position || "No position"}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono mt-0.5">{r.employee_id}</p>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-2 mt-3 text-xs">
+                    <div><span className="text-muted-foreground">Nationality:</span> <span className="font-medium">{r.nationality || "—"}</span></div>
+                    <div><span className="text-muted-foreground">Salary:</span> <span className="font-medium">{r.salary?.toLocaleString() || "—"}</span></div>
+                    <div className="col-span-2 flex items-center gap-1.5">
+                      <span className="text-muted-foreground">Visa:</span>
+                      <span className="font-medium">{r.visa_expiry || "—"}</span>
+                      {getVisaBadge(r.visa_expiry)}
+                    </div>
+                  </div>
+                  <div className="flex gap-1 mt-3 pt-3 border-t justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3 w-3 mr-1" />View</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
+                    <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3" /></Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="mt-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
+          </>
+        ) : (
+          /* Table View */
           <>
           <BulkActions selectedIds={bulk.selectedIds} totalItems={pageData.length} onSelectAll={bulk.selectAll} onClearSelection={bulk.clearSelection} onBulkDelete={() => bulkDelete.mutate()} allSelected={bulk.allSelected} />
           <div className="overflow-x-auto">
           <Table><TableHeader><TableRow>
             <TableHead className="w-10"><Checkbox checked={bulk.allSelected} onCheckedChange={(c) => bulk.selectAll(!!c)} /></TableHead>
-            <SortableHeader label="ID" sortKey="employee_id" direction={getSortDirection("employee_id")} onToggle={toggleSort} />
-            <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+            <SortableHeader label="Employee" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
             <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
             <SortableHeader label="Nationality" sortKey="nationality" direction={getSortDirection("nationality")} onToggle={toggleSort} />
             <SortableHeader label="Salary" sortKey="salary" direction={getSortDirection("salary")} onToggle={toggleSort} />
             <SortableHeader label="Visa Expiry" sortKey="visa_expiry" direction={getSortDirection("visa_expiry")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
+            <TableHead>Actions</TableHead>
           </TableRow></TableHeader>
-            <TableBody>{pageData.map((r: any) => {
-              const visaExpiring = r.visa_expiry && new Date(r.visa_expiry) < new Date(Date.now() + 30*86400000);
-              return (
-              <TableRow key={r.id} className={bulk.isSelected(r.id) ? "bg-primary/5" : ""}>
+            <TableBody>{pageData.map((r: any) => (
+              <TableRow key={r.id} className={`group ${bulk.isSelected(r.id) ? "bg-primary/5" : ""}`}>
                 <TableCell><Checkbox checked={bulk.isSelected(r.id)} onCheckedChange={() => bulk.toggle(r.id)} /></TableCell>
-                <TableCell className="text-xs font-mono">{r.employee_id}</TableCell>
-                <TableCell className="font-medium">{r.name}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-2.5">
+                    <div className={`h-8 w-8 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${getAvatarColor(r.name || "")}`}>
+                      {getInitials(r.name || "?")}
+                    </div>
+                    <div>
+                      <p className="font-medium text-sm">{r.name}</p>
+                      <p className="text-[10px] text-muted-foreground font-mono">{r.employee_id}</p>
+                    </div>
+                  </div>
+                </TableCell>
                 <TableCell>{r.position || "—"}</TableCell>
                 <TableCell>{r.nationality || "—"}</TableCell>
-                <TableCell>{r.salary?.toLocaleString() || "—"}</TableCell>
-                <TableCell><span className={visaExpiring ? "text-destructive font-medium" : ""}>{r.visa_expiry || "—"}</span></TableCell>
+                <TableCell className="font-medium">{r.salary ? `AED ${r.salary.toLocaleString()}` : "—"}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <span>{r.visa_expiry || "—"}</span>
+                    {getVisaBadge(r.visa_expiry)}
+                  </div>
+                </TableCell>
                 <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                 <TableCell>
-                  <div className="flex gap-1">
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
                   </div>
                 </TableCell>
               </TableRow>
-            );})}</TableBody></Table>
+            ))}</TableBody></Table>
           </div>
           <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
           </>
         )}
       </CardContent></Card>
 
+      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editingId ? "Edit Employee" : "Add Employee"}</DialogTitle></DialogHeader>
@@ -232,21 +402,38 @@ export default function Employees() {
         </DialogContent>
       </Dialog>
 
+      {/* View Dialog - Enhanced */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader><DialogTitle>Employee Details</DialogTitle></DialogHeader>
           {viewing && (
-            <div className="space-y-3 text-sm">
-              <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-4">
+              <div className="flex items-center gap-3 pb-3 border-b">
+                <div className={`h-14 w-14 rounded-full flex items-center justify-center text-lg font-bold ${getAvatarColor(viewing.name || "")}`}>
+                  {getInitials(viewing.name || "?")}
+                </div>
+                <div>
+                  <h3 className="font-semibold text-lg">{viewing.name}</h3>
+                  <p className="text-sm text-muted-foreground">{viewing.position || "No position"} · {viewing.employee_id}</p>
+                  <Badge variant={viewing.status === "active" ? "default" : "secondary"} className="mt-1">{viewing.status}</Badge>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
                 {[
-                  ["Employee ID", viewing.employee_id], ["Name", viewing.name], ["Position", viewing.position],
-                  ["Nationality", viewing.nationality], ["Email", viewing.email], ["Phone", viewing.phone],
-                  ["Salary", `AED ${viewing.salary?.toLocaleString() || 0}`], ["Join Date", viewing.join_date],
+                  ["Email", viewing.email], ["Phone", viewing.phone],
+                  ["Nationality", viewing.nationality], ["Salary", `AED ${viewing.salary?.toLocaleString() || 0}`],
+                  ["Join Date", viewing.join_date ? format(new Date(viewing.join_date), "dd MMM yyyy") : null],
                   ["Passport", viewing.passport_no], ["Visa No", viewing.visa_no],
-                  ["Visa Expiry", viewing.visa_expiry], ["Status", viewing.status],
                 ].map(([label, val]) => (
                   <div key={label as string}><p className="text-muted-foreground text-xs">{label}</p><p className="font-medium">{val || "—"}</p></div>
                 ))}
+                <div className="col-span-2">
+                  <p className="text-muted-foreground text-xs">Visa Expiry</p>
+                  <div className="flex items-center gap-2">
+                    <p className="font-medium">{viewing.visa_expiry ? format(new Date(viewing.visa_expiry), "dd MMM yyyy") : "—"}</p>
+                    {getVisaBadge(viewing.visa_expiry)}
+                  </div>
+                </div>
               </div>
             </div>
           )}
