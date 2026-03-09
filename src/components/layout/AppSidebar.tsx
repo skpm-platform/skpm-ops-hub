@@ -12,6 +12,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { useSystemSetting } from "@/hooks/use-system-settings";
 import { useUserRole } from "@/hooks/use-profile";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Sidebar, SidebarContent, SidebarGroup, SidebarGroupContent, SidebarGroupLabel,
   SidebarMenu, SidebarMenuButton, SidebarMenuItem, SidebarFooter, SidebarHeader, useSidebar,
@@ -22,7 +24,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import skpmLogo from "@/assets/skpm-logo.png";
 
-type NavItem = { title: string; url: string; icon: React.ComponentType<any>; adminOnly?: boolean; managerUp?: boolean };
+type NavItem = { title: string; url: string; icon: React.ComponentType<any>; adminOnly?: boolean; managerUp?: boolean; badgeKey?: string };
 type NavGroup = { label: string; items: NavItem[]; adminOnly?: boolean };
 
 const navGroups: NavGroup[] = [
@@ -32,15 +34,15 @@ const navGroups: NavGroup[] = [
   ]},
   { label: "Operations", items: [
     { title: "Projects", url: "/projects", icon: FolderKanban },
-    { title: "Tasks", url: "/tasks", icon: CheckSquare },
-    { title: "Work Orders", url: "/work-orders", icon: Wrench },
+    { title: "Tasks", url: "/tasks", icon: CheckSquare, badgeKey: "openTasks" },
+    { title: "Work Orders", url: "/work-orders", icon: Wrench, badgeKey: "openWorkOrders" },
     { title: "Maintenance", url: "/maintenance", icon: CalendarIcon },
   ]},
   { label: "Finance", items: [
     { title: "Finance", url: "/finance", icon: DollarSign, managerUp: true },
     { title: "Quotations", url: "/quotations", icon: FileSignature },
     { title: "Invoices", url: "/invoices", icon: Receipt },
-    { title: "Expenses", url: "/expenses", icon: CreditCard },
+    { title: "Expenses", url: "/expenses", icon: CreditCard, badgeKey: "pendingExpenses" },
     { title: "Purchase Orders", url: "/purchase-orders", icon: ShoppingCart, managerUp: true },
   ]},
   { label: "Clients & Contracts", items: [
@@ -50,7 +52,7 @@ const navGroups: NavGroup[] = [
   { label: "People", items: [
     { title: "Employees", url: "/employees", icon: Users },
     { title: "Attendance", url: "/attendance", icon: Clock },
-    { title: "Leave", url: "/leave", icon: UserMinus },
+    { title: "Leave", url: "/leave", icon: UserMinus, badgeKey: "pendingLeaves" },
     { title: "Manpower", url: "/manpower", icon: HardHat },
     { title: "Requisitions", url: "/requisitions", icon: Send },
     { title: "Deployments", url: "/deployments", icon: CalendarPlus },
@@ -67,7 +69,7 @@ const navGroups: NavGroup[] = [
     { title: "Warehouse", url: "/warehouse", icon: Package },
   ]},
   { label: "HSE", items: [
-    { title: "Health & Safety", url: "/hse", icon: Shield },
+    { title: "Health & Safety", url: "/hse", icon: Shield, badgeKey: "openHSE" },
     { title: "Training", url: "/training", icon: GraduationCap },
   ]},
   { label: "Facilities", items: [
@@ -93,6 +95,31 @@ const navGroups: NavGroup[] = [
   ]},
 ];
 
+function useSidebarBadges(isManagerUp: boolean) {
+  const { data: badges } = useQuery({
+    queryKey: ["sidebar-badges"],
+    queryFn: async () => {
+      const [leaves, expenses, workOrders, tasks, hse] = await Promise.all([
+        supabase.from("leave_requests").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        supabase.from("expenses").select("id", { count: "exact", head: true }).eq("status", "pending"),
+        supabase.from("work_orders").select("id", { count: "exact", head: true }).eq("status", "open"),
+        supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "done"),
+        supabase.from("hse_incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
+      ]);
+      return {
+        pendingLeaves: leaves.count ?? 0,
+        pendingExpenses: expenses.count ?? 0,
+        openWorkOrders: workOrders.count ?? 0,
+        openTasks: tasks.count ?? 0,
+        openHSE: hse.count ?? 0,
+      };
+    },
+    refetchInterval: 60000, // refresh every minute
+    enabled: isManagerUp,
+  });
+  return badges ?? {};
+}
+
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
@@ -103,6 +130,7 @@ export function AppSidebar() {
   const userRole = role ?? "staff";
   const isAdmin = userRole === "admin";
   const isManagerUp = userRole === "admin" || userRole === "manager";
+  const badges = useSidebarBadges(isManagerUp);
 
   const logoSrc = companyLogoUrl || skpmLogo;
 
@@ -122,6 +150,11 @@ export function AppSidebar() {
     if (g.adminOnly && !isAdmin) return false;
     return g.items.length > 0;
   });
+
+  const getBadgeCount = (key?: string): number => {
+    if (!key || !isManagerUp) return 0;
+    return (badges as Record<string, number>)[key] ?? 0;
+  };
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
@@ -148,20 +181,28 @@ export function AppSidebar() {
               <SidebarGroup key={group.label} className="py-1">
                 <SidebarGroupContent>
                   <SidebarMenu>
-                    {group.items.map((item) => (
-                      <SidebarMenuItem key={item.title}>
-                        <SidebarMenuButton asChild>
-                          <NavLink
-                            to={item.url}
-                            end={item.url === "/"}
-                            className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded"
-                            activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
-                          >
-                            <item.icon className="h-4 w-4" />
-                          </NavLink>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
+                    {group.items.map((item) => {
+                      const count = getBadgeCount(item.badgeKey);
+                      return (
+                        <SidebarMenuItem key={item.title}>
+                          <SidebarMenuButton asChild>
+                            <NavLink
+                              to={item.url}
+                              end={item.url === "/"}
+                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded relative"
+                              activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                            >
+                              <item.icon className="h-4 w-4" />
+                              {count > 0 && (
+                                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1">
+                                  {count > 99 ? "99+" : count}
+                                </span>
+                              )}
+                            </NavLink>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
                   </SidebarMenu>
                 </SidebarGroupContent>
               </SidebarGroup>
@@ -180,21 +221,29 @@ export function AppSidebar() {
                 <CollapsibleContent>
                   <SidebarGroupContent>
                     <SidebarMenu>
-                      {group.items.map((item) => (
-                        <SidebarMenuItem key={item.title}>
-                          <SidebarMenuButton asChild>
-                            <NavLink
-                              to={item.url}
-                              end={item.url === "/"}
-                              className="text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded px-2 py-1.5"
-                              activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium border-l-2 border-sidebar-primary"
-                            >
-                              <item.icon className="mr-2.5 h-3.5 w-3.5 shrink-0" />
-                              <span>{item.title}</span>
-                            </NavLink>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      ))}
+                      {group.items.map((item) => {
+                        const count = getBadgeCount(item.badgeKey);
+                        return (
+                          <SidebarMenuItem key={item.title}>
+                            <SidebarMenuButton asChild>
+                              <NavLink
+                                to={item.url}
+                                end={item.url === "/"}
+                                className="text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded px-2 py-1.5"
+                                activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium border-l-2 border-sidebar-primary"
+                              >
+                                <item.icon className="mr-2.5 h-3.5 w-3.5 shrink-0" />
+                                <span className="flex-1">{item.title}</span>
+                                {count > 0 && (
+                                  <span className="ml-auto h-5 min-w-[20px] rounded-full bg-destructive/15 text-destructive text-[10px] font-semibold flex items-center justify-center px-1.5">
+                                    {count > 99 ? "99+" : count}
+                                  </span>
+                                )}
+                              </NavLink>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
                     </SidebarMenu>
                   </SidebarGroupContent>
                 </CollapsibleContent>
