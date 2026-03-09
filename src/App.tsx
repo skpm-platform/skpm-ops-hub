@@ -56,7 +56,12 @@ const NotFound = lazy(() => import("./pages/NotFound"));
 
 const queryClient = new QueryClient();
 
-const Loading = () => <div className="min-h-screen flex items-center justify-center text-muted-foreground">Loading...</div>;
+const Loading = () => (
+  <div className="min-h-screen flex flex-col items-center justify-center gap-3">
+    <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+    <p className="text-sm text-muted-foreground animate-pulse">Loading...</p>
+  </div>
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
