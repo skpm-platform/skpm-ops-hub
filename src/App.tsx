@@ -56,7 +56,23 @@ const ApprovalCenter = lazy(() => import("./pages/ApprovalCenter"));
 const FinancialReports = lazy(() => import("./pages/FinancialReports"));
 const NotFound = lazy(() => import("./pages/NotFound"));
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 60 * 1000, // 1 minute - reduce excessive refetches
+      gcTime: 5 * 60 * 1000, // 5 minutes garbage collection
+      retry: (failureCount, error: any) => {
+        // Don't retry on 4xx errors
+        if (error?.status >= 400 && error?.status < 500) return false;
+        return failureCount < 2;
+      },
+      refetchOnWindowFocus: false, // Prevent refetch on tab switch
+    },
+    mutations: {
+      retry: 1,
+    },
+  },
+});
 
 const Loading = () => (
   <div className="min-h-screen flex flex-col items-center justify-center gap-3">
