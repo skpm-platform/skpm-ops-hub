@@ -6,9 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Package, AlertTriangle, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Package, AlertTriangle, Pencil, Trash2, LayoutGrid, List, Eye, Boxes, TrendingUp, BarChart3 } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -17,11 +18,24 @@ import { ExportButton } from "@/components/ExportButton";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { ComboboxSelect } from "@/components/ComboboxSelect";
 
+const categoryColors: Record<string, string> = {
+  tools: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
+  safety: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400",
+  electrical: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400",
+  plumbing: "bg-cyan-100 text-cyan-700 dark:bg-cyan-900/30 dark:text-cyan-400",
+  paint: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400",
+  hardware: "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300",
+  consumables: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400",
+};
+
 export default function Warehouse() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [stockFilter, setStockFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [open, setOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+  const [viewing, setViewing] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ name: "", sku: "", category: "", quantity: "", min_stock: "", unit_cost: "", unit: "pcs", location: "" });
@@ -54,88 +68,258 @@ export default function Warehouse() {
     setOpen(true);
   };
 
-  const lowStockItems = data.filter((r: any) => r.quantity <= r.min_stock);
+  const lowStockItems = data.filter((r: any) => r.quantity <= r.min_stock && r.min_stock > 0);
   const totalValue = data.reduce((s: number, r: any) => s + (r.quantity || 0) * (r.unit_cost || 0), 0);
+  const totalItems = data.reduce((s: number, r: any) => s + (r.quantity || 0), 0);
+  const categories = [...new Set(data.map((r: any) => r.category).filter(Boolean))] as string[];
+
+  // Category value breakdown
+  const categoryValues = categories.map(cat => ({
+    name: cat,
+    value: data.filter((r: any) => r.category === cat).reduce((s: number, r: any) => s + (r.quantity || 0) * (r.unit_cost || 0), 0),
+    count: data.filter((r: any) => r.category === cat).length,
+  })).sort((a, b) => b.value - a.value);
 
   const filtered = data
     .filter((r: any) => r.name?.toLowerCase().includes(search.toLowerCase()) || r.sku?.toLowerCase().includes(search.toLowerCase()))
-    .filter((r: any) => stockFilter === "all" || (stockFilter === "low" && r.quantity <= r.min_stock) || (stockFilter === "ok" && r.quantity > r.min_stock));
-  const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
+    .filter((r: any) => stockFilter === "all" || (stockFilter === "low" && r.quantity <= r.min_stock && r.min_stock > 0) || (stockFilter === "ok" && (r.quantity > r.min_stock || r.min_stock === 0)));
+  const { pageData, page, totalPages, totalItems: paginatedTotal, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
+
+  const stockLevel = (r: any) => {
+    if (!r.min_stock || r.min_stock === 0) return "normal";
+    const ratio = r.quantity / r.min_stock;
+    if (ratio <= 1) return "critical";
+    if (ratio <= 1.5) return "warning";
+    return "normal";
+  };
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3"><Package className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Warehouse</h1></div>
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-3">
+          <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Boxes className="h-6 w-6 text-primary" /></div>
+          <div><h1 className="text-2xl font-bold">Warehouse</h1><p className="text-sm text-muted-foreground">{data.length} items, {totalItems.toLocaleString()} units</p></div>
+        </div>
         <div className="flex gap-2">
+          <div className="flex border rounded-md">
+            <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === "grid" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-l-none" onClick={() => setViewMode("grid")}><LayoutGrid className="h-4 w-4" /></Button>
+          </div>
           <ExportButton data={data} filename="inventory" />
           <Button onClick={() => { resetForm(); setEditingId(null); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Item</Button>
         </div>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Items</p><p className="text-2xl font-semibold mt-1">{data.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Value</p><p className="text-2xl font-semibold mt-1">AED {totalValue.toLocaleString()}</p></CardContent></Card>
-        <Card><CardContent className="p-4 flex items-start justify-between"><div><p className="text-xs text-muted-foreground uppercase tracking-wider">Low Stock</p><p className="text-2xl font-semibold mt-1 text-destructive">{lowStockItems.length}</p></div>{lowStockItems.length > 0 && <AlertTriangle className="h-5 w-5 text-destructive" />}</CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Categories</p><p className="text-2xl font-semibold mt-1">{new Set(data.map((r: any) => r.category).filter(Boolean)).size}</p></CardContent></Card>
+      {/* Low Stock Alert */}
+      {lowStockItems.length > 0 && (
+        <Card className="border-destructive/30 bg-destructive/5">
+          <CardContent className="p-4">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertTriangle className="h-5 w-5 text-destructive" />
+              <p className="font-semibold text-destructive">{lowStockItems.length} item{lowStockItems.length > 1 ? "s" : ""} below minimum stock</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {lowStockItems.slice(0, 5).map((r: any) => (
+                <Badge key={r.id} variant="outline" className="text-destructive border-destructive/30">
+                  {r.name}: {r.quantity}/{r.min_stock} {r.unit}
+                </Badge>
+              ))}
+              {lowStockItems.length > 5 && <Badge variant="outline">+{lowStockItems.length - 5} more</Badge>}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      <div className="grid gap-3 sm:grid-cols-4">
+        <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Items</p>
+            <Package className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="text-2xl font-bold mt-1">{data.length}</p>
+          <p className="text-xs text-muted-foreground mt-1">{categories.length} categories</p>
+        </CardContent></Card>
+        <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Inventory Value</p>
+            <TrendingUp className="h-4 w-4 text-emerald-500" />
+          </div>
+          <p className="text-2xl font-bold mt-1">AED {totalValue.toLocaleString()}</p>
+          <p className="text-xs text-muted-foreground mt-1">{totalItems.toLocaleString()} total units</p>
+        </CardContent></Card>
+        <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Low Stock</p>
+            <AlertTriangle className={`h-4 w-4 ${lowStockItems.length > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+          </div>
+          <p className={`text-2xl font-bold mt-1 ${lowStockItems.length > 0 ? "text-destructive" : ""}`}>{lowStockItems.length}</p>
+          <p className="text-xs text-muted-foreground mt-1">{data.length > 0 ? Math.round((lowStockItems.length / data.length) * 100) : 0}% of inventory</p>
+        </CardContent></Card>
+        <Card className="hover:shadow-md transition-shadow"><CardContent className="p-4">
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider">Top Category</p>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </div>
+          <p className="text-2xl font-bold mt-1 capitalize">{categoryValues[0]?.name || "—"}</p>
+          <p className="text-xs text-muted-foreground mt-1">AED {(categoryValues[0]?.value || 0).toLocaleString()}</p>
+        </CardContent></Card>
       </div>
 
       <div className="flex gap-2">
-        <Button variant={stockFilter === "all" ? "default" : "outline"} size="sm" onClick={() => setStockFilter("all")}>All</Button>
-        <Button variant={stockFilter === "low" ? "destructive" : "outline"} size="sm" onClick={() => setStockFilter(stockFilter === "low" ? "all" : "low")} className="gap-1"><AlertTriangle className="h-3 w-3" />Low Stock</Button>
+        <Button variant={stockFilter === "all" ? "default" : "outline"} size="sm" onClick={() => setStockFilter("all")}>All ({data.length})</Button>
+        <Button variant={stockFilter === "low" ? "destructive" : "outline"} size="sm" onClick={() => setStockFilter(stockFilter === "low" ? "all" : "low")} className="gap-1"><AlertTriangle className="h-3 w-3" />Low Stock ({lowStockItems.length})</Button>
+        <Button variant={stockFilter === "ok" ? "default" : "outline"} size="sm" onClick={() => setStockFilter(stockFilter === "ok" ? "all" : "ok")}>In Stock ({data.length - lowStockItems.length})</Button>
       </div>
 
       <Card><CardContent className="pt-6">
         <div className="mb-4 relative"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search inventory..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
-        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No inventory</p> : (
+
+        {isLoading ? <p className="text-muted-foreground">Loading...</p> : filtered.length === 0 ? <p className="text-center text-muted-foreground py-8">No inventory items found</p> : viewMode === "grid" ? (
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {pageData.map((r: any) => {
+              const level = stockLevel(r);
+              const stockPct = r.min_stock > 0 ? Math.min(100, Math.round((r.quantity / (r.min_stock * 2)) * 100)) : 100;
+              return (
+                <Card key={r.id} className={`hover:shadow-md transition-all group cursor-pointer ${level === "critical" ? "border-destructive/30" : ""}`} onClick={() => { setViewing(r); setViewOpen(true); }}>
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-start justify-between">
+                      <Badge className={`${categoryColors[r.category] || "bg-muted"} border-0 capitalize`}>{r.category || "other"}</Badge>
+                      {level === "critical" ? <Badge variant="destructive" className="text-[10px]">Low Stock</Badge> :
+                        level === "warning" ? <Badge className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 text-[10px] border-0">Warning</Badge> :
+                          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px] border-0">OK</Badge>}
+                    </div>
+                    <div>
+                      <p className="font-semibold">{r.name}</p>
+                      <p className="text-xs text-muted-foreground font-mono">{r.sku}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-muted-foreground">Stock</span>
+                        <span className="font-medium">{r.quantity} / {r.min_stock > 0 ? `${r.min_stock} min` : "∞"} {r.unit}</span>
+                      </div>
+                      <Progress value={stockPct} className={`h-1.5 ${level === "critical" ? "[&>div]:bg-destructive" : level === "warning" ? "[&>div]:bg-amber-500" : ""}`} />
+                    </div>
+                    <div className="flex justify-between text-sm pt-1">
+                      <span className="text-muted-foreground">{r.location || "No location"}</span>
+                      <span className="font-semibold">AED {((r.quantity || 0) * (r.unit_cost || 0)).toLocaleString()}</span>
+                    </div>
+                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={() => handleEdit(r)}><Pencil className="h-3 w-3 mr-1" />Edit</Button>
+                      <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3 w-3 mr-1" />Delete</Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
           <>
-          <Table><TableHeader><TableRow>
-            <SortableHeader label="SKU" sortKey="sku" direction={getSortDirection("sku")} onToggle={toggleSort} />
-            <SortableHeader label="Item" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
-            <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
-            <SortableHeader label="Qty" sortKey="quantity" direction={getSortDirection("quantity")} onToggle={toggleSort} />
-            <SortableHeader label="Min" sortKey="min_stock" direction={getSortDirection("min_stock")} onToggle={toggleSort} />
-            <SortableHeader label="Unit Cost" sortKey="unit_cost" direction={getSortDirection("unit_cost")} onToggle={toggleSort} />
-            <SortableHeader label="Status" sortKey="quantity" direction={null} onToggle={() => {}} />
-            <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
-          </TableRow></TableHeader>
-            <TableBody>{pageData.map((r: any) => (
-              <TableRow key={r.id}>
-                <TableCell className="text-xs font-mono">{r.sku}</TableCell>
-                <TableCell className="font-medium">{r.name}</TableCell>
-                <TableCell>{r.category || "—"}</TableCell>
-                <TableCell>{r.quantity}</TableCell>
-                <TableCell>{r.min_stock}</TableCell>
-                <TableCell>AED {r.unit_cost?.toLocaleString()}</TableCell>
-                <TableCell>{r.quantity <= r.min_stock ? <Badge variant="destructive">Low Stock</Badge> : <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 border-0">OK</Badge>}</TableCell>
-                <TableCell>
-                  <div className="flex gap-1">
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
-                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}</TableBody></Table>
-          <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
+            <Table><TableHeader><TableRow>
+              <SortableHeader label="SKU" sortKey="sku" direction={getSortDirection("sku")} onToggle={toggleSort} />
+              <SortableHeader label="Item" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
+              <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
+              <SortableHeader label="Qty" sortKey="quantity" direction={getSortDirection("quantity")} onToggle={toggleSort} />
+              <SortableHeader label="Min" sortKey="min_stock" direction={getSortDirection("min_stock")} onToggle={toggleSort} />
+              <SortableHeader label="Unit Cost" sortKey="unit_cost" direction={getSortDirection("unit_cost")} onToggle={toggleSort} />
+              <SortableHeader label="Stock Level" sortKey="quantity" direction={null} onToggle={() => {}} />
+              <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
+            </TableRow></TableHeader>
+              <TableBody>{pageData.map((r: any) => {
+                const level = stockLevel(r);
+                const stockPct = r.min_stock > 0 ? Math.min(100, Math.round((r.quantity / (r.min_stock * 2)) * 100)) : 100;
+                return (
+                  <TableRow key={r.id} className={`group ${level === "critical" ? "bg-destructive/5" : ""}`}>
+                    <TableCell className="text-xs font-mono">{r.sku}</TableCell>
+                    <TableCell className="font-medium">{r.name}</TableCell>
+                    <TableCell><Badge className={`${categoryColors[r.category] || "bg-muted"} border-0 capitalize text-xs`}>{r.category || "—"}</Badge></TableCell>
+                    <TableCell>
+                      <span className={level === "critical" ? "text-destructive font-bold" : ""}>{r.quantity}</span>
+                      <span className="text-muted-foreground text-xs ml-1">{r.unit}</span>
+                    </TableCell>
+                    <TableCell>{r.min_stock}</TableCell>
+                    <TableCell>AED {r.unit_cost?.toLocaleString()}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2 min-w-[120px]">
+                        <Progress value={stockPct} className={`h-1.5 flex-1 ${level === "critical" ? "[&>div]:bg-destructive" : level === "warning" ? "[&>div]:bg-amber-500" : ""}`} />
+                        {level === "critical" && <AlertTriangle className="h-3.5 w-3.5 text-destructive shrink-0" />}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(r.id)}><Trash2 className="h-3.5 w-3.5 text-destructive" /></Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}</TableBody></Table>
           </>
         )}
+        <DataTablePagination page={page} totalPages={totalPages} totalItems={paginatedTotal} pageSize={pageSize} onPageChange={setPage} />
       </CardContent></Card>
 
+      {/* View Dialog */}
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Item Details</DialogTitle></DialogHeader>
+        {viewing && (() => {
+          const level = stockLevel(viewing);
+          const stockPct = viewing.min_stock > 0 ? Math.min(100, Math.round((viewing.quantity / (viewing.min_stock * 2)) * 100)) : 100;
+          const itemValue = (viewing.quantity || 0) * (viewing.unit_cost || 0);
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <div className={`h-12 w-12 rounded-lg flex items-center justify-center ${categoryColors[viewing.category] || "bg-muted"}`}>
+                  <Package className="h-5 w-5" />
+                </div>
+                <div>
+                  <p className="font-semibold text-lg">{viewing.name}</p>
+                  <p className="text-xs text-muted-foreground font-mono">{viewing.sku}</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div><p className="text-muted-foreground text-xs">Category</p><p className="font-medium capitalize">{viewing.category || "—"}</p></div>
+                <div><p className="text-muted-foreground text-xs">Location</p><p className="font-medium">{viewing.location || "—"}</p></div>
+                <div><p className="text-muted-foreground text-xs">Unit</p><p className="font-medium">{viewing.unit}</p></div>
+                <div><p className="text-muted-foreground text-xs">Unit Cost</p><p className="font-medium">AED {viewing.unit_cost?.toLocaleString()}</p></div>
+              </div>
+              <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Current Stock</span>
+                  <span className={`font-bold ${level === "critical" ? "text-destructive" : ""}`}>{viewing.quantity} {viewing.unit}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span>Minimum Required</span>
+                  <span>{viewing.min_stock} {viewing.unit}</span>
+                </div>
+                <Progress value={stockPct} className={`h-2 ${level === "critical" ? "[&>div]:bg-destructive" : level === "warning" ? "[&>div]:bg-amber-500" : ""}`} />
+                <div className="flex justify-between text-sm pt-1 border-t">
+                  <span>Total Value</span>
+                  <span className="font-semibold">AED {itemValue.toLocaleString()}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })()}
+      </DialogContent></Dialog>
+
+      {/* Add/Edit Dialog */}
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent>
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "Add"} Inventory Item</DialogTitle></DialogHeader>
         <div className="space-y-4">
-          <div><Label>Item Name</Label><Input value={form.name} onChange={e => setForm({...form, name: e.target.value})} /></div>
+          <div><Label>Item Name *</Label><Input value={form.name} onChange={e => setForm({ ...form, name: e.target.value })} /></div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>SKU</Label><Input value={form.sku} onChange={e => setForm({...form, sku: e.target.value})} placeholder="Auto-generated" /></div>
-            <div><Label>Category</Label><ComboboxSelect value={form.category} onChange={v => setForm({...form, category: v})} options={["tools","safety","electrical","plumbing","paint","hardware","consumables"]} placeholder="Select or type" /></div>
+            <div><Label>SKU</Label><Input value={form.sku} onChange={e => setForm({ ...form, sku: e.target.value })} placeholder="Auto-generated" /></div>
+            <div><Label>Category</Label><ComboboxSelect value={form.category} onChange={v => setForm({ ...form, category: v })} options={["tools", "safety", "electrical", "plumbing", "paint", "hardware", "consumables"]} placeholder="Select or type" /></div>
           </div>
           <div className="grid grid-cols-3 gap-2">
-            <div><Label>Quantity</Label><Input type="number" value={form.quantity} onChange={e => setForm({...form, quantity: e.target.value})} /></div>
-            <div><Label>Min Stock</Label><Input type="number" value={form.min_stock} onChange={e => setForm({...form, min_stock: e.target.value})} /></div>
-            <div><Label>Unit Cost</Label><Input type="number" value={form.unit_cost} onChange={e => setForm({...form, unit_cost: e.target.value})} /></div>
+            <div><Label>Quantity</Label><Input type="number" value={form.quantity} onChange={e => setForm({ ...form, quantity: e.target.value })} /></div>
+            <div><Label>Min Stock</Label><Input type="number" value={form.min_stock} onChange={e => setForm({ ...form, min_stock: e.target.value })} /></div>
+            <div><Label>Unit Cost</Label><Input type="number" value={form.unit_cost} onChange={e => setForm({ ...form, unit_cost: e.target.value })} /></div>
           </div>
           <div className="grid grid-cols-2 gap-3">
-            <div><Label>Unit</Label><ComboboxSelect value={form.unit} onChange={v => setForm({...form, unit: v})} options={["pcs","kg","m","ltr","box","set","roll"]} placeholder="Select unit" /></div>
-            <div><Label>Location</Label><Input value={form.location} onChange={e => setForm({...form, location: e.target.value})} /></div>
+            <div><Label>Unit</Label><ComboboxSelect value={form.unit} onChange={v => setForm({ ...form, unit: v })} options={["pcs", "kg", "m", "ltr", "box", "set", "roll"]} placeholder="Select unit" /></div>
+            <div><Label>Location</Label><Input value={form.location} onChange={e => setForm({ ...form, location: e.target.value })} /></div>
           </div>
           <Button className="w-full" onClick={() => save.mutate()} disabled={!form.name || save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Add Item"}</Button>
         </div>
