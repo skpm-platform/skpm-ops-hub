@@ -21,6 +21,7 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
 import { AIInsightsWidget } from "@/components/AIInsightsWidget";
+import { ExpiryAlertsWidget } from "@/components/ExpiryAlertsWidget";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
