@@ -77,15 +77,16 @@ export default function WorkOrders() {
         throw new Error("Validation failed");
       }
       setFormErrors({});
+      const d = result.data as Record<string, any>;
       if (editingId) {
-        const { error } = await supabase.from("work_orders").update(result.data).eq("id", editingId);
+        const { error } = await supabase.from("work_orders").update({ title: d.title, type: d.type, priority: d.priority, description: d.description, due_date: d.due_date || null, status: d.status }).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated work order", result.data.title, "work_orders");
+        await logAudit("Updated work order", d.title as string, "work_orders");
       } else {
-        const insertData = { title: result.data.title, type: result.data.type, priority: result.data.priority, description: result.data.description, due_date: result.data.due_date || null, status: result.data.status, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id };
+        const insertData = { title: d.title as string, type: d.type as string, priority: d.priority as string, description: d.description as string, due_date: (d.due_date as string) || null, status: d.status as string, wo_no: `WO-${Date.now().toString().slice(-6)}`, created_by: user?.id };
         const { error } = await supabase.from("work_orders").insert(insertData);
         if (error) throw error;
-        await logAudit("Created work order", result.data.title, "work_orders");
+        await logAudit("Created work order", d.title as string, "work_orders");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["work_orders"] }); toast.success(editingId ? "Updated" : "Work order created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
