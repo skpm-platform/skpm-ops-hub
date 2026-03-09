@@ -15,7 +15,7 @@ const nameMap: Record<string, string> = {
   documents: "Documents", reports: "Reports", "visitor-log": "Visitor Log", helpdesk: "Helpdesk",
   members: "Members", "audit-logs": "Audit Logs", settings: "Settings",
   timesheets: "Timesheets", "duty-roster": "Duty Roster", "gate-passes": "Gate Passes",
-  "mp-billing": "MP Billing",
+  "mp-billing": "MP Billing"
 };
 
 export function Breadcrumbs() {
@@ -30,19 +30,19 @@ export function Breadcrumbs() {
         <BreadcrumbItem>
           <BreadcrumbLink asChild><Link to="/"><Home className="h-3.5 w-3.5" /></Link></BreadcrumbLink>
         </BreadcrumbItem>
-        {segments.map((seg, i) => (
-          <Fragment key={seg}>
+        {segments.map((seg, i) =>
+        <Fragment key={seg}>
             <BreadcrumbSeparator />
             <BreadcrumbItem>
-              {i === segments.length - 1 ? (
-                <span className="text-foreground font-medium">{nameMap[seg] ?? seg}</span>
-              ) : (
-                <BreadcrumbLink asChild><Link to={`/${segments.slice(0, i + 1).join("/")}`}>{nameMap[seg] ?? seg}</Link></BreadcrumbLink>
-              )}
+              {i === segments.length - 1 ?
+            <span className="text-foreground font-medium">{nameMap[seg] ?? seg}</span> :
+
+            <BreadcrumbLink asChild><Link to={`/${segments.slice(0, i + 1).join("/")}`}>{nameMap[seg] ?? seg}</Link></BreadcrumbLink>
+            }
             </BreadcrumbItem>
           </Fragment>
-        ))}
+        )}
       </BreadcrumbList>
-    </Breadcrumb>
-  );
+    </Breadcrumb>);
+
 }
