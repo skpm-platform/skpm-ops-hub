@@ -278,7 +278,7 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/leave")}>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/approvals")}>
               Review <ChevronRight className="h-3 w-3" />
             </Button>
           </CardContent>
