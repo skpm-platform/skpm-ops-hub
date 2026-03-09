@@ -109,12 +109,14 @@ function useSidebarBadges(isManagerUp: boolean) {
         supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "done"),
         supabase.from("hse_incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
       ]);
+      const pendingApprovals = (leaves.count ?? 0) + (expenses.count ?? 0);
       return {
         pendingLeaves: leaves.count ?? 0,
         pendingExpenses: expenses.count ?? 0,
         openWorkOrders: workOrders.count ?? 0,
         openTasks: tasks.count ?? 0,
         openHSE: hse.count ?? 0,
+        pendingApprovals,
       };
     },
     refetchInterval: 60000, // refresh every minute
