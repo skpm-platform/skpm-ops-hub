@@ -20,14 +20,14 @@ import { ComboboxSelect } from "@/components/ComboboxSelect";
 import { StatusFilter, buildStatuses } from "@/components/StatusFilter";
 
 const shiftIcons: Record<string, any> = { day: Sun, night: Moon, split: Scissors, overtime: Clock };
-const shiftColors: Record<string, string> = { day: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", night: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400", split: "bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400", overtime: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
+const shiftColors: Record<string, string> = { day: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", night: "bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400", split: "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400", overtime: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
 
 export default function DutyRoster() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [open, setOpen] = useState(false);
-  const [form, setForm] = useState({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "" });
+  const [form, setForm] = useState({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "", employee_id: "" });
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["duty_roster"],
@@ -38,13 +38,20 @@ export default function DutyRoster() {
     },
   });
 
+  const { data: drEmployeeList = [] } = useQuery({
+    queryKey: ["dr-employees-list"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("duty_roster").insert(form);
+      const payload: any = { date: form.date, shift: form.shift, start_time: form.start_time, end_time: form.end_time, notes: form.notes };
+      if (form.employee_id) payload.employee_id = form.employee_id;
+      const { error } = await supabase.from("duty_roster").insert(payload);
       if (error) throw error;
       await logAudit("Added roster entry", form.date);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["duty_roster"] }); setOpen(false); setForm({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "" }); toast.success("Roster entry added"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["duty_roster"] }); setOpen(false); setForm({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "", employee_id: "" }); toast.success("Roster entry added"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -75,8 +82,11 @@ export default function DutyRoster() {
             <DialogContent>
               <DialogHeader><DialogTitle>New Roster Entry</DialogTitle></DialogHeader>
               <div className="space-y-4">
+                <div className="space-y-2"><Label>Employee</Label>
+                  <ComboboxSelect value={form.employee_id} onChange={v => setForm(f => ({ ...f, employee_id: v }))} options={drEmployeeList.map((e: any) => ({ value: e.id, label: e.name }))} placeholder="Select employee" />
+                </div>
                 <div className="space-y-2"><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-                <div className="space-y-2"><Label>Shift</Label>
+                <div className="space-y-2"><Label>Shift Type</Label>
                   <ComboboxSelect value={form.shift} onChange={v => setForm(f => ({ ...f, shift: v }))} options={["day","night","split","overtime"]} placeholder="Select shift" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">

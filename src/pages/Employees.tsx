@@ -49,6 +49,7 @@ export default function Employees() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [deptFilter, setDeptFilter] = useState("all");
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
   const [open, setOpen] = useState(false);
   const [viewOpen, setViewOpen] = useState(false);
@@ -96,11 +97,28 @@ export default function Employees() {
     setOpen(true);
   };
 
+  const departments = ["all", ...Array.from(new Set(data.map((r: any) => r.department).filter(Boolean))) as string[]];
+
   const filtered = data.filter((r: any) => {
     const matchSearch = r.name?.toLowerCase().includes(search.toLowerCase()) || r.employee_id?.toLowerCase().includes(search.toLowerCase()) || r.position?.toLowerCase().includes(search.toLowerCase());
     const matchStatus = statusFilter === "all" || r.status === statusFilter;
-    return matchSearch && matchStatus;
+    const matchDept = deptFilter === "all" || r.department === deptFilter;
+    return matchSearch && matchStatus && matchDept;
   });
+
+  const getContractBadge = (contractEndDate: string | null) => {
+    if (!contractEndDate) return null;
+    const days = differenceInDays(new Date(contractEndDate), new Date());
+    if (days >= 0 && days <= 30) return <Badge variant="secondary" className="border-0 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">Expiring Soon</Badge>;
+    return null;
+  };
+
+  const getProbationTooltip = (probationEndDate: string | null) => {
+    if (!probationEndDate) return null;
+    const days = differenceInDays(new Date(probationEndDate), new Date());
+    if (days > 0) return `${days} days until probation ends`;
+    return "Probation ended";
+  };
 
   const statuses = [
     { value: "all", label: "All", count: data.length },
@@ -168,6 +186,25 @@ export default function Employees() {
     return null;
   };
 
+  const handlePhoneCopy = (phone: string) => {
+    if (!phone) return;
+    navigator.clipboard.writeText(phone).then(() => toast.success(`Copied: ${phone}`)).catch(() => toast.error("Failed to copy"));
+  };
+
+  const handleBulkExport = () => {
+    const selectedRows = data.filter((r: any) => bulk.selectedIds.includes(r.id));
+    if (selectedRows.length === 0) { toast.error("No employees selected"); return; }
+    const cols = ["employee_id","name","position","nationality","salary","status","phone","email","visa_expiry"];
+    const header = cols.join(",");
+    const csvRows = selectedRows.map((r: any) => cols.map(c => `"${(r[c] ?? "").toString().replace(/"/g, '""')}"`).join(","));
+    const csv = [header, ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a"); a.href = url; a.download = "employees-selected.csv"; a.click();
+    URL.revokeObjectURL(url);
+    toast.success(`Exported ${selectedRows.length} employees`);
+  };
+
   const getInitials = (name: string) => name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
   const getAvatarColor = (name: string) => {
     const colors = ["bg-primary/15 text-primary", "bg-accent text-accent-foreground", "bg-destructive/15 text-destructive", "bg-warning/15 text-warning", "bg-success/15 text-success"];
@@ -181,6 +218,7 @@ export default function Employees() {
         <div className="flex gap-2">
           <CSVImportButton onImport={handleCSVImport} expectedColumns={["name", "email", "phone", "position", "nationality", "salary"]} label="Import" />
           <ExportButton data={filtered} filename="employees" columns={[{key:"employee_id",label:"ID"},{key:"name",label:"Name"},{key:"position",label:"Position"},{key:"nationality",label:"Nationality"},{key:"salary",label:"Salary"},{key:"status",label:"Status"}]} />
+          <Button size="sm" variant="outline" className="h-9" onClick={handleBulkExport} disabled={bulk.selectedIds.length === 0} title="Export selected rows">Export Selected ({bulk.selectedIds.length})</Button>
           <Button size="sm" className="h-9" onClick={() => { setEditingId(null); setForm(emptyForm); setOpen(true); }}><Plus className="h-4 w-4 mr-2" />Add Employee</Button>
         </div>
       </div>
@@ -273,6 +311,11 @@ export default function Employees() {
       <Card><CardContent className="pt-6">
         <div className="flex flex-col sm:flex-row gap-3 mb-4">
           <div className="relative flex-1"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input placeholder="Search by name, ID, position..." value={search} onChange={e => setSearch(e.target.value)} className="pl-9" /></div>
+          {departments.length > 1 && (
+            <select className="h-9 rounded-md border border-input bg-background px-3 text-sm" value={deptFilter} onChange={e => setDeptFilter(e.target.value)}>
+              {departments.map(d => <option key={d} value={d}>{d === "all" ? "All Departments" : d}</option>)}
+            </select>
+          )}
           <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
           <div className="flex border rounded-md">
             <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
@@ -331,6 +374,7 @@ export default function Employees() {
             <SortableHeader label="Position" sortKey="position" direction={getSortDirection("position")} onToggle={toggleSort} />
             <SortableHeader label="Nationality" sortKey="nationality" direction={getSortDirection("nationality")} onToggle={toggleSort} />
             <SortableHeader label="Salary" sortKey="salary" direction={getSortDirection("salary")} onToggle={toggleSort} />
+            <TableHead>Phone</TableHead>
             <SortableHeader label="Visa Expiry" sortKey="visa_expiry" direction={getSortDirection("visa_expiry")} onToggle={toggleSort} />
             <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
             <TableHead>Actions</TableHead>
@@ -349,16 +393,33 @@ export default function Employees() {
                     </div>
                   </div>
                 </TableCell>
-                <TableCell>{r.position || "—"}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span>{r.position || "—"}</span>
+                    {getContractBadge(r.contract_end_date)}
+                  </div>
+                </TableCell>
                 <TableCell>{r.nationality || "—"}</TableCell>
                 <TableCell className="font-medium">{r.salary ? `AED ${r.salary.toLocaleString()}` : "—"}</TableCell>
+                <TableCell>
+                  {r.phone ? (
+                    <button type="button" className="text-sm hover:underline cursor-pointer text-left" title="Click to copy phone" onClick={() => handlePhoneCopy(r.phone)}>
+                      {r.phone}
+                    </button>
+                  ) : "—"}
+                </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
                     <span>{r.visa_expiry || "—"}</span>
                     {getVisaBadge(r.visa_expiry)}
                   </div>
                 </TableCell>
-                <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge>
+                    {r.probation_end_date && <span title={getProbationTooltip(r.probation_end_date) || ""} className="cursor-help text-muted-foreground text-xs border-b border-dashed">{getProbationTooltip(r.probation_end_date)?.includes("until") ? "On Probation" : ""}</span>}
+                  </div>
+                </TableCell>
                 <TableCell>
                   <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
                     <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => { setViewing(r); setViewOpen(true); }}><Eye className="h-3.5 w-3.5" /></Button>

@@ -54,6 +54,33 @@ export default function Attendance() {
     enabled: isAdmin,
   });
 
+  const { data: allActiveEmployees = [] } = useQuery({
+    queryKey: ["active-employees-count"],
+    queryFn: async () => {
+      const { data } = await (supabase as any).from("employees").select("id, name").eq("status", "active");
+      return data || [];
+    },
+    enabled: isAdmin,
+  });
+
+  const markAllPresent = useMutation({
+    mutationFn: async () => {
+      if (!isAdmin) throw new Error("Unauthorized");
+      const today = format(new Date(), "yyyy-MM-dd");
+      const { data: existing } = await supabase.from("attendance").select("user_id").eq("date", today);
+      const existingIds = new Set((existing || []).map((r: any) => r.user_id));
+      const toInsert = allActiveEmployees
+        .filter((e: any) => !existingIds.has(e.id))
+        .map((e: any) => ({ user_id: e.id, date: today, status: "present", clock_in: new Date().toISOString() }));
+      if (toInsert.length === 0) { toast.info("All employees already marked for today"); return; }
+      const { error } = await supabase.from("attendance").insert(toInsert);
+      if (error) throw error;
+      await logAudit("Mark all present", `${toInsert.length} employees marked for ${today}`);
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["attendance"] }); queryClient.invalidateQueries({ queryKey: ["attendance-all"] }); toast.success("All active employees marked present for today"); },
+    onError: (e: Error) => toast.error(e.message),
+  });
+
   const todayRecord = records?.find(r => r.date === format(new Date(), "yyyy-MM-dd"));
   const isClockedIn = todayRecord && !todayRecord.clock_out;
 
@@ -134,6 +161,14 @@ export default function Attendance() {
   const sessionHours = Math.floor(sessionMinutes / 60);
   const sessionMins = sessionMinutes % 60;
 
+  const [statusFilterAtt, setStatusFilterAtt] = useState("all");
+
+  const isLateCheckIn = (clockIn: string | null) => {
+    if (!clockIn) return false;
+    const t = new Date(clockIn);
+    return t.getHours() > 9 || (t.getHours() === 9 && t.getMinutes() > 0);
+  };
+
   const displayRecords = records ?? [];
 
   const handleEdit = (r: any) => {
@@ -148,6 +183,11 @@ export default function Attendance() {
         <div><h1 className="text-2xl font-bold">Attendance</h1><p className="text-muted-foreground">Track daily attendance & working hours</p></div>
         <div className="flex gap-2">
           <ExportButton data={displayRecords} filename="attendance" columns={[{key:"date",label:"Date"},{key:"clock_in",label:"Clock In"},{key:"clock_out",label:"Clock Out"},{key:"status",label:"Status"},{key:"notes",label:"Notes"}]} />
+          {isAdmin && (
+            <Button onClick={() => markAllPresent.mutate()} disabled={markAllPresent.isPending} variant="outline" size="sm" className="h-9 gap-2">
+              {markAllPresent.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} Mark All Present
+            </Button>
+          )}
           <Button onClick={() => clockIn.mutate()} disabled={!!isClockedIn || !!todayRecord || clockIn.isPending} size="sm" className="h-9 gap-2">
             {clockIn.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <LogIn className="h-4 w-4" />} Clock In
           </Button>
@@ -177,6 +217,21 @@ export default function Attendance() {
       )}
 
       {/* KPI Cards */}
+      {isAdmin && allActiveEmployees.length > 0 && (() => {
+        const todayStr = format(new Date(), "yyyy-MM-dd");
+        const todayPresentCount = (allRecords ?? []).filter((r: any) => r.date === todayStr && (r.status === "present" || r.status === "late")).length;
+        const todayAbsentCount = allActiveEmployees.length - todayPresentCount;
+        return (
+          <Card className="border-primary/20 bg-primary/5">
+            <CardContent className="p-4 flex items-center gap-6">
+              <div><p className="text-xs text-muted-foreground uppercase tracking-wider">Today's Attendance</p>
+                <p className="text-lg font-bold"><span className="text-success">{todayPresentCount}</span> / {allActiveEmployees.length} employees present</p>
+              </div>
+              {todayAbsentCount > 0 && <Badge variant="secondary" className="border-0 bg-destructive/10 text-destructive">{todayAbsentCount} absent</Badge>}
+            </CardContent>
+          </Card>
+        );
+      })()}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <Card className="hover:shadow-md transition-shadow">
           <CardContent className="p-4">
@@ -296,11 +351,21 @@ export default function Attendance() {
         <TabsContent value="records">
           <Card>
             <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between flex-wrap gap-2">
                 <CardTitle className="text-base">Attendance Records</CardTitle>
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input placeholder="Search records..." className="pl-9 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+                <div className="flex gap-2 items-center flex-wrap">
+                  <select className="h-8 rounded-md border border-input bg-background px-2 text-xs" value={statusFilterAtt} onChange={e => setStatusFilterAtt(e.target.value)}>
+                    <option value="all">All</option>
+                    <option value="present">Present</option>
+                    <option value="late">Late</option>
+                    <option value="absent">Absent</option>
+                    <option value="half-day">Half Day</option>
+                    <option value="leave">On Leave</option>
+                  </select>
+                  <div className="relative w-48">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input placeholder="Search records..." className="pl-9 h-8" value={search} onChange={e => setSearch(e.target.value)} />
+                  </div>
                 </div>
               </div>
             </CardHeader>
@@ -324,10 +389,17 @@ export default function Attendance() {
                     {displayRecords.length === 0 ? (
                       <TableRow><TableCell colSpan={isAdmin ? 7 : 6} className="text-center text-muted-foreground py-8">No records yet. Clock in to start.</TableCell></TableRow>
                     ) : (
-                      displayRecords.filter(r => !search || r.date.includes(search) || r.status?.includes(search)).slice(0, 31).map((r) => (
+                      displayRecords.filter(r => (!search || r.date.includes(search) || r.status?.includes(search)) && (statusFilterAtt === "all" || r.status === statusFilterAtt)).slice(0, 31).map((r) => (
                         <TableRow key={r.id} className="group">
                           <TableCell className="font-medium">{format(new Date(r.date), "dd MMM yyyy")}</TableCell>
-                          <TableCell className="font-mono text-sm">{r.clock_in ? format(new Date(r.clock_in), "HH:mm:ss") : "—"}</TableCell>
+                          <TableCell className="font-mono text-sm">
+                            <div className="flex items-center gap-1.5">
+                              {r.clock_in ? format(new Date(r.clock_in), "HH:mm:ss") : "—"}
+                              {r.clock_in && isLateCheckIn(r.clock_in) && r.status !== "late" && (
+                                <Badge variant="secondary" className="border-0 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">Late</Badge>
+                              )}
+                            </div>
+                          </TableCell>
                           <TableCell className="font-mono text-sm">{r.clock_out ? format(new Date(r.clock_out), "HH:mm:ss") : "—"}</TableCell>
                           <TableCell className="font-medium">{getWorkHours(r)}</TableCell>
                           <TableCell>
@@ -370,10 +442,17 @@ export default function Attendance() {
                       <TableHead>Clock Out</TableHead>
                       <TableHead>Hours</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Monthly Rate</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {(allRecords ?? []).slice(0, 20).map((r: any) => (
+                    {(allRecords ?? []).slice(0, 20).map((r: any) => {
+                      const mStart = format(monthStart, "yyyy-MM-dd");
+                      const mEnd = format(monthEnd, "yyyy-MM-dd");
+                      const empMonthRecords = (allRecords ?? []).filter((ar: any) => ar.user_id === r.user_id && ar.date >= mStart && ar.date <= mEnd);
+                      const empPresent = empMonthRecords.filter((ar: any) => ar.status === "present" || ar.status === "late").length;
+                      const empRate = workingDays > 0 ? Math.round((empPresent / workingDays) * 100) : 0;
+                      return (
                       <TableRow key={r.id}>
                         <TableCell className="font-mono text-xs">{r.user_id?.slice(0, 8)}...</TableCell>
                         <TableCell>{format(new Date(r.date), "dd MMM")}</TableCell>
@@ -386,10 +465,17 @@ export default function Attendance() {
                             {r.status}
                           </Badge>
                         </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-medium">{empRate}%</span>
+                            <Progress value={empRate} className="h-1.5 w-16" />
+                          </div>
+                        </TableCell>
                       </TableRow>
-                    ))}
+                      );
+                    })}
                     {(allRecords ?? []).length === 0 && (
-                      <TableRow><TableCell colSpan={6} className="text-center text-muted-foreground py-8">No team records</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No team records</TableCell></TableRow>
                     )}
                   </TableBody>
                 </Table>

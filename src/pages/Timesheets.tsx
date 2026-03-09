@@ -30,20 +30,39 @@ export default function Timesheets() {
   const [open, setOpen] = useState(false);
   const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
-  const [form, setForm] = useState({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "" });
+  const [form, setForm] = useState({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "", employee_id: "", project_id: "", site_id: "", start_time: "", end_time: "" });
 
   const { data: rows = [], isLoading } = useQuery({
     queryKey: ["timesheets"],
     queryFn: async () => { const { data, error } = await supabase.from("timesheets").select("*, employees(name), projects(name), sites(name)").order("created_at", { ascending: false }); if (error) throw error; return data; },
   });
 
+  const { data: employeeList = [] } = useQuery({
+    queryKey: ["employees-list"],
+    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+  });
+  const { data: projectList = [] } = useQuery({
+    queryKey: ["projects-list"],
+    queryFn: async () => { const { data } = await (supabase as any).from("projects").select("id, name").order("name"); return data || []; },
+  });
+  const { data: siteList = [] } = useQuery({
+    queryKey: ["sites-list"],
+    queryFn: async () => { const { data } = await (supabase as any).from("sites").select("id, name").order("name"); return data || []; },
+  });
+
   const save = useMutation({
     mutationFn: async () => {
-      const { error } = await supabase.from("timesheets").insert({ date: form.date, hours_worked: Number(form.hours_worked), overtime_hours: Number(form.overtime_hours), notes: form.notes });
+      const payload: any = { date: form.date, hours_worked: Number(form.hours_worked), overtime_hours: Number(form.overtime_hours), notes: form.notes };
+      if (form.employee_id) payload.employee_id = form.employee_id;
+      if (form.project_id) payload.project_id = form.project_id;
+      if (form.site_id) payload.site_id = form.site_id;
+      if (form.start_time) payload.start_time = form.start_time;
+      if (form.end_time) payload.end_time = form.end_time;
+      const { error } = await supabase.from("timesheets").insert(payload);
       if (error) throw error;
       await logAudit("Added timesheet entry", `${form.date}: ${form.hours_worked}h`);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); setOpen(false); setForm({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "" }); toast.success("Timesheet added"); },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); setOpen(false); setForm({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "", employee_id: "", project_id: "", site_id: "", start_time: "", end_time: "" }); toast.success("Timesheet added"); },
     onError: (e: any) => toast.error(e.message),
   });
 
@@ -99,7 +118,12 @@ export default function Timesheets() {
                   <TableRow key={r.id}>
                     <TableCell className="font-medium">{r.employees?.name ?? "—"}</TableCell>
                     <TableCell>{r.date ? format(new Date(r.date), "dd MMM yyyy") : "—"}</TableCell>
-                    <TableCell>{r.hours_worked}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5">
+                        <span>{r.hours_worked}</span>
+                        {(r.hours_worked > 8 || r.overtime_hours > 0) && <Badge variant="secondary" className="border-0 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">OT</Badge>}
+                      </div>
+                    </TableCell>
                     <TableCell>{r.overtime_hours > 0 ? <span className="text-warning font-medium">{r.overtime_hours}</span> : "0"}</TableCell>
                     <TableCell>{r.projects?.name ?? "—"}</TableCell>
                     <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
@@ -122,7 +146,16 @@ export default function Timesheets() {
       <Dialog open={open} onOpenChange={setOpen}><DialogContent>
         <DialogHeader><DialogTitle>New Timesheet Entry</DialogTitle></DialogHeader>
         <div className="space-y-4">
+          <div><Label>Employee</Label><ComboboxSelect value={form.employee_id} onChange={v => setForm({ ...form, employee_id: v })} options={employeeList.map((e: any) => ({ value: e.id, label: e.name }))} placeholder="Select employee" /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Project</Label><ComboboxSelect value={form.project_id} onChange={v => setForm({ ...form, project_id: v })} options={projectList.map((p: any) => ({ value: p.id, label: p.name }))} placeholder="Select project" /></div>
+            <div><Label>Site</Label><ComboboxSelect value={form.site_id} onChange={v => setForm({ ...form, site_id: v })} options={siteList.map((s: any) => ({ value: s.id, label: s.name }))} placeholder="Select site" /></div>
+          </div>
           <div><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div className="grid grid-cols-2 gap-3">
+            <div><Label>Start Time</Label><Input type="time" value={form.start_time} onChange={e => setForm({ ...form, start_time: e.target.value })} /></div>
+            <div><Label>End Time</Label><Input type="time" value={form.end_time} onChange={e => setForm({ ...form, end_time: e.target.value })} /></div>
+          </div>
           <div className="grid grid-cols-2 gap-3">
             <div><Label>Hours Worked</Label><Input type="number" min={0} max={24} value={form.hours_worked} onChange={e => setForm({ ...form, hours_worked: e.target.value })} /></div>
             <div><Label>Overtime Hours</Label><Input type="number" min={0} value={form.overtime_hours} onChange={e => setForm({ ...form, overtime_hours: e.target.value })} /></div>
