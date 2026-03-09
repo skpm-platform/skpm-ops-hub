@@ -85,6 +85,7 @@ const navGroups: NavGroup[] = [
     { title: "Announcements", url: "/announcements", icon: Megaphone },
     { title: "Documents", url: "/documents", icon: FileText },
     { title: "Reports", url: "/reports", icon: BarChart3 },
+    { title: "Financial Reports", url: "/financial-reports", icon: PieChart, managerUp: true },
   ]},
   { label: "IT & Admin", items: [
     { title: "Helpdesk", url: "/helpdesk", icon: Monitor },
