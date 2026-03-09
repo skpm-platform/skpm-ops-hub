@@ -1,14 +1,16 @@
 import { z } from "zod";
 
-// Sanitize string - strip potential XSS
+// Sanitize string helper
+export function sanitizeHtml(val: string): string {
+  return val.replace(/<[^>]*>/g, "").replace(/javascript:/gi, "");
+}
+
+// Safe string schema - basic string with max length
 const safeString = (maxLen = 255) =>
-  z.string().trim().max(maxLen).refine(
-    (val) => !/<script/i.test(val),
-    "Invalid characters detected"
-  );
+  z.string().trim().max(maxLen);
 
 const safeOptionalString = (maxLen = 255) =>
-  safeString(maxLen).optional().or(z.literal(""));
+  z.string().trim().max(maxLen).optional().or(z.literal(""));
 
 // Auth schemas
 export const loginSchema = z.object({
