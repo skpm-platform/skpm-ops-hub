@@ -21,6 +21,7 @@ import {
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 import * as XLSX from "xlsx";
 import { AIInsightsWidget } from "@/components/AIInsightsWidget";
+import { ExpiryAlertsWidget } from "@/components/ExpiryAlertsWidget";
 import { useNavigate } from "react-router-dom";
 
 export default function Dashboard() {
@@ -277,7 +278,7 @@ export default function Dashboard() {
                 </p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/leave")}>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/approvals")}>
               Review <ChevronRight className="h-3 w-3" />
             </Button>
           </CardContent>
@@ -444,7 +445,7 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* AI Insights + Bottom Row */}
+      {/* AI Insights + Expiry Alerts */}
       <div className="grid gap-4 lg:grid-cols-3">
         <AIInsightsWidget kpiData={{
           employees: employeeCount, presentToday, attendanceRate,
@@ -454,6 +455,7 @@ export default function Dashboard() {
           unpaidInvoices, unpaidTotal, openWorkOrders: openWO,
           openHSEIncidents: openHSE, pendingLeaves, pendingExpenses,
         }} />
+        <ExpiryAlertsWidget />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">

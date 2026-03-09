@@ -6,6 +6,7 @@ import {
   MapPin, Megaphone, BarChart3, UserCheck, ClipboardList,
   Truck, Home, Monitor, Contact, UserMinus, Send, CalendarPlus,
   KeyRound, Timer, CalendarClock, Banknote, ChevronDown, UserCircle,
+  ClipboardCheck, PieChart,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
@@ -31,6 +32,7 @@ const navGroups: NavGroup[] = [
   { label: "Overview", items: [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
     { title: "My Profile", url: "/my-profile", icon: UserCircle },
+    { title: "Approvals", url: "/approvals", icon: ClipboardCheck, managerUp: true, badgeKey: "pendingApprovals" },
   ]},
   { label: "Operations", items: [
     { title: "Projects", url: "/projects", icon: FolderKanban },
@@ -83,6 +85,7 @@ const navGroups: NavGroup[] = [
     { title: "Announcements", url: "/announcements", icon: Megaphone },
     { title: "Documents", url: "/documents", icon: FileText },
     { title: "Reports", url: "/reports", icon: BarChart3 },
+    { title: "Financial Reports", url: "/financial-reports", icon: PieChart, managerUp: true },
   ]},
   { label: "IT & Admin", items: [
     { title: "Helpdesk", url: "/helpdesk", icon: Monitor },
@@ -106,12 +109,14 @@ function useSidebarBadges(isManagerUp: boolean) {
         supabase.from("tasks").select("id", { count: "exact", head: true }).neq("status", "done"),
         supabase.from("hse_incidents").select("id", { count: "exact", head: true }).eq("status", "open"),
       ]);
+      const pendingApprovals = (leaves.count ?? 0) + (expenses.count ?? 0);
       return {
         pendingLeaves: leaves.count ?? 0,
         pendingExpenses: expenses.count ?? 0,
         openWorkOrders: workOrders.count ?? 0,
         openTasks: tasks.count ?? 0,
         openHSE: hse.count ?? 0,
+        pendingApprovals,
       };
     },
     refetchInterval: 60000, // refresh every minute
