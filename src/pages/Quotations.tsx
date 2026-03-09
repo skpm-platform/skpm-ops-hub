@@ -8,11 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, FileSignature, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, FileSignature, Pencil, Trash2, Eye, Printer, Send } from "lucide-react";
 import { toast } from "sonner";
+import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
@@ -23,6 +25,14 @@ import { quotationSchema } from "@/lib/validations";
 
 const statusColors: Record<string, string> = { draft: "bg-muted text-muted-foreground", sent: "bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400", approved: "bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400", rejected: "bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400" };
 
+function getValidityBadge(valid_until: string | null, status: string) {
+  if (!valid_until) return null;
+  const days = differenceInDays(new Date(valid_until), new Date());
+  if (days < 0) return <Badge variant="secondary" className="border-0 bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-400 text-[10px]">Expired</Badge>;
+  if (days <= 7) return <Badge variant="secondary" className="border-0 bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400 text-[10px]">Expiring {days}d</Badge>;
+  return <Badge variant="secondary" className="border-0 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400 text-[10px]">Valid</Badge>;
+}
+
 export default function Quotations() {
   const { user } = useAuth();
   const qc = useQueryClient();
@@ -31,6 +41,8 @@ export default function Quotations() {
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [viewItem, setViewItem] = useState<any>(null);
+  const [viewOpen, setViewOpen] = useState(false);
   const [form, setForm] = useState({ client_id: "", valid_until: "", subtotal: "", status: "draft" });
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -83,11 +95,91 @@ export default function Quotations() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const markSent = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await (supabase as any).from("quotations").update({ status: "sent" }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["quotations"] });
+      toast.success("Marked as sent");
+      setViewItem((prev: any) => prev ? { ...prev, status: "sent" } : null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
+  const convertToInvoice = useMutation({
+    mutationFn: async (q: any) => {
+      const { error } = await (supabase as any).from("invoices").insert({
+        client_id: q.client_id || null,
+        subtotal: q.subtotal,
+        vat: q.vat,
+        total: q.total,
+        status: "draft",
+        invoice_no: `INV-${Date.now().toString().slice(-6)}`,
+        created_by: user?.id,
+      });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success("Invoice created from quotation");
+      setViewOpen(false);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
     setForm({ client_id: r.client_id || "", valid_until: r.valid_until || "", subtotal: String(r.subtotal || ""), status: r.status || "draft" });
     setFormErrors({});
     setOpen(true);
+  };
+
+  const printQuotation = (r: any) => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    const validityDays = r.valid_until ? differenceInDays(new Date(r.valid_until), new Date()) : null;
+    win.document.write(`<!DOCTYPE html><html><head><title>Quotation ${r.quote_no}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; color: #333; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; border-bottom: 2px solid #333; padding-bottom: 16px; }
+  .company { font-size: 24px; font-weight: bold; color: #1a1a2e; }
+  .quote-title { font-size: 32px; font-weight: bold; color: #4f46e5; }
+  .quote-no { font-size: 18px; color: #666; margin-top: 4px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .info-block label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 0.05em; }
+  .info-block p { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; }
+  td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .totals { max-width: 300px; margin-left: auto; }
+  .totals tr td { border: none; padding: 6px 12px; }
+  .total-row td { font-size: 18px; font-weight: bold; border-top: 2px solid #333 !important; padding-top: 12px !important; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<div class="header">
+  <div><div class="company">SKPM Operations</div><div style="color:#666;font-size:13px;margin-top:4px;">skpm@example.com</div></div>
+  <div style="text-align:right"><div class="quote-title">QUOTATION</div><div class="quote-no">${r.quote_no}</div></div>
+</div>
+<div class="info-grid">
+  <div class="info-block"><label>Prepared For</label><p>${r.clients?.name || "—"}</p></div>
+  <div class="info-block"><label>Status</label><p style="text-transform:capitalize">${r.status}</p></div>
+  <div class="info-block"><label>Date</label><p>${format(new Date(), "dd MMM yyyy")}</p></div>
+  <div class="info-block"><label>Valid Until</label><p>${r.valid_until ? format(new Date(r.valid_until), "dd MMM yyyy") : "—"}${validityDays !== null ? ` (${validityDays >= 0 ? validityDays + " days left" : "Expired"})` : ""}</p></div>
+</div>
+<table>
+  <thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody><tr><td>Professional Services</td><td style="text-align:right">AED ${Number(r.subtotal).toLocaleString()}</td></tr></tbody>
+</table>
+<table class="totals">
+  <tr><td style="color:#666">Subtotal</td><td style="text-align:right">AED ${Number(r.subtotal).toLocaleString()}</td></tr>
+  <tr><td style="color:#666">VAT (5%)</td><td style="text-align:right">AED ${Number(r.vat).toLocaleString()}</td></tr>
+  <tr class="total-row"><td>Total</td><td style="text-align:right">AED ${Number(r.total).toLocaleString()}</td></tr>
+</table>
+<div style="margin-top:40px;text-align:center;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px;">This quotation is valid until ${r.valid_until ? format(new Date(r.valid_until), "dd MMM yyyy") : "further notice"}</div>
+</body></html>`);
+    win.document.close();
+    win.print();
   };
 
   const toggleSelect = (id: string) => {
@@ -151,10 +243,16 @@ export default function Quotations() {
                 <TableCell>{r.subtotal?.toLocaleString()}</TableCell>
                 <TableCell className="text-muted-foreground">{r.vat?.toLocaleString()}</TableCell>
                 <TableCell className="font-medium">AED {r.total?.toLocaleString()}</TableCell>
-                <TableCell>{r.valid_until || "—"}</TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">{r.valid_until || "—"}</span>
+                    {r.valid_until && getValidityBadge(r.valid_until, r.status)}
+                  </div>
+                </TableCell>
                 <TableCell><Badge variant="secondary" className={`border-0 ${statusColors[r.status] || ""}`}>{r.status}</Badge></TableCell>
                 <TableCell>
                   <div className="flex gap-1">
+                    <Button variant="ghost" size="icon" onClick={() => { setViewItem(r); setViewOpen(true); }}><Eye className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => handleEdit(r)}><Pencil className="h-4 w-4" /></Button>
                     <Button variant="ghost" size="icon" onClick={() => setDeleteId(r.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
                   </div>
@@ -166,6 +264,7 @@ export default function Quotations() {
         )}
       </CardContent></Card>
 
+      {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={o => { setOpen(o); if (!o) { setEditingId(null); resetForm(); } }}><DialogContent>
         <DialogHeader><DialogTitle>{editingId ? "Edit" : "New"} Quotation</DialogTitle></DialogHeader>
         <div className="space-y-4">
@@ -177,6 +276,56 @@ export default function Quotations() {
           </div>
           <Button className="w-full" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create"}</Button>
         </div>
+      </DialogContent></Dialog>
+
+      {/* View Dialog */}
+      <Dialog open={viewOpen} onOpenChange={o => { setViewOpen(o); if (!o) setViewItem(null); }}><DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center justify-between">
+            Quotation Details
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => viewItem && printQuotation(viewItem)}><Printer className="h-3 w-3" />Print</Button>
+          </DialogTitle>
+        </DialogHeader>
+        {viewItem && (
+          <div className="space-y-4 text-sm">
+            <div className="flex items-center justify-between pb-3 border-b">
+              <div>
+                <p className="font-mono text-lg font-bold">{viewItem.quote_no}</p>
+                <p className="text-muted-foreground">{viewItem.clients?.name || "No Client"}</p>
+              </div>
+              <Badge variant="secondary" className={`border-0 ${statusColors[viewItem.status] || ""}`}>{viewItem.status}</Badge>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><p className="text-muted-foreground text-xs">Valid Until</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="font-medium">{viewItem.valid_until ? format(new Date(viewItem.valid_until), "dd MMM yyyy") : "—"}</p>
+                  {viewItem.valid_until && getValidityBadge(viewItem.valid_until, viewItem.status)}
+                </div>
+              </div>
+              <div><p className="text-muted-foreground text-xs">Status</p><p className="font-medium capitalize">{viewItem.status}</p></div>
+            </div>
+            <div className="p-3 bg-muted rounded-lg space-y-2">
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">Subtotal</span><span>AED {Number(viewItem.subtotal).toLocaleString()}</span></div>
+              <div className="flex justify-between text-xs"><span className="text-muted-foreground">VAT (5%)</span><span>AED {Number(viewItem.vat).toLocaleString()}</span></div>
+              <Separator />
+              <div className="flex justify-between font-bold"><span>Total</span><span>AED {Number(viewItem.total).toLocaleString()}</span></div>
+            </div>
+            {/* Action buttons */}
+            <div className="flex gap-2 flex-wrap pt-2 border-t">
+              {viewItem.status === "draft" && (
+                <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => markSent.mutate(viewItem.id)} disabled={markSent.isPending}>
+                  <Send className="h-3 w-3" />Mark as Sent
+                </Button>
+              )}
+              <Button size="sm" variant="outline" className="h-8 gap-1.5 text-xs" onClick={() => convertToInvoice.mutate(viewItem)} disabled={convertToInvoice.isPending}>
+                Convert to Invoice
+              </Button>
+              <Button size="sm" variant="ghost" className="h-8 gap-1.5 text-xs" onClick={() => { setViewOpen(false); handleEdit(viewItem); }}>
+                <Pencil className="h-3 w-3" />Edit
+              </Button>
+            </div>
+          </div>
+        )}
       </DialogContent></Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} onConfirm={() => deleteId && del.mutate(deleteId)} />

@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -25,7 +26,7 @@ import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
 import {
   Plus, TrendingUp, TrendingDown, DollarSign, Loader2, Search,
-  Trash2, Eye, Wallet, ArrowUpRight, ArrowDownRight, PieChartIcon,
+  Trash2, Eye, Wallet, ArrowUpRight, ArrowDownRight, PieChartIcon, Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
@@ -34,29 +35,55 @@ const incomeCategories = ["Service Revenue", "Contract Payment", "Manpower Billi
 const expenseCategories = ["Salaries", "Rent", "Equipment", "Transport", "Utilities", "Materials", "Other Expense"];
 const pieColors = ["hsl(var(--primary))", "hsl(var(--success))", "hsl(var(--warning))", "hsl(var(--info))", "hsl(var(--destructive))", "hsl(var(--muted-foreground))", "hsl(var(--accent))"];
 
+const emptyForm = { type: "income", amount: "", category: "", description: "", date: format(new Date(), "yyyy-MM-dd"), reference: "", receipt_url: "" };
+
 export default function Finance() {
   const { user } = useAuth();
   const qc = useQueryClient();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [viewItem, setViewItem] = useState<any>(null);
   const [deleteId, setDeleteId] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState("all");
-  const [form, setForm] = useState({ type: "income", amount: "", category: "", description: "", date: format(new Date(), "yyyy-MM-dd") });
+  const [filterMonth, setFilterMonth] = useState("all");
+  const [filterYear, setFilterYear] = useState("all");
+  const [form, setForm] = useState(emptyForm);
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ["transactions"],
     queryFn: async () => { const { data, error } = await supabase.from("transactions").select("*").order("date", { ascending: false }); if (error) throw error; return data ?? []; },
   });
 
-  const addTransaction = useMutation({
+  const saveTransaction = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not logged in");
-      const { error } = await supabase.from("transactions").insert({ type: form.type, amount: parseFloat(form.amount), category: form.category, description: form.description, date: form.date, created_by: user.id });
-      if (error) throw error;
-      await logAudit("Added transaction", `${form.type}: AED ${form.amount}`);
+      const payload = {
+        type: form.type,
+        amount: parseFloat(form.amount),
+        category: form.category,
+        description: form.description,
+        date: form.date,
+        reference: form.reference || null,
+        receipt_url: form.receipt_url || null,
+      };
+      if (editingId) {
+        const { error } = await (supabase as any).from("transactions").update(payload).eq("id", editingId);
+        if (error) throw error;
+        await logAudit("Updated transaction", `${form.type}: AED ${form.amount}`);
+      } else {
+        const { error } = await (supabase as any).from("transactions").insert({ ...payload, created_by: user.id });
+        if (error) throw error;
+        await logAudit("Added transaction", `${form.type}: AED ${form.amount}`);
+      }
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ["transactions"] }); setDialogOpen(false); setForm({ type: "income", amount: "", category: "", description: "", date: format(new Date(), "yyyy-MM-dd") }); toast.success("Transaction added"); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["transactions"] });
+      setDialogOpen(false);
+      setEditingId(null);
+      setForm(emptyForm);
+      toast.success(editingId ? "Transaction updated" : "Transaction added");
+    },
     onError: (e: Error) => toast.error(e.message),
   });
 
@@ -64,6 +91,20 @@ export default function Finance() {
     mutationFn: async (id: string) => { const { error } = await supabase.from("transactions").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["transactions"] }); toast.success("Deleted"); setDeleteId(null); },
   });
+
+  const handleEdit = (t: any) => {
+    setEditingId(t.id);
+    setForm({
+      type: t.type,
+      amount: String(t.amount),
+      category: t.category || "",
+      description: t.description || "",
+      date: t.date || format(new Date(), "yyyy-MM-dd"),
+      reference: t.reference || "",
+      receipt_url: t.receipt_url || "",
+    });
+    setDialogOpen(true);
+  };
 
   const totalIncome = transactions.filter(t => t.type === "income").reduce((s, t) => s + Number(t.amount), 0);
   const totalExpense = transactions.filter(t => t.type === "expense").reduce((s, t) => s + Number(t.amount), 0);
@@ -115,10 +156,24 @@ export default function Finance() {
     { value: "expense", label: "Expense", count: transactions.filter(t => t.type === "expense").length },
   ];
 
+  // Available years from transactions
+  const availableYears = Array.from(new Set(transactions.map(t => t.date?.substring(0, 4)))).filter(Boolean).sort().reverse();
+
   const filtered = transactions.filter(t => {
-    const matchSearch = (t.description || "").toLowerCase().includes(search.toLowerCase()) || (t.category || "").toLowerCase().includes(search.toLowerCase());
+    const matchSearch = (t.description || "").toLowerCase().includes(search.toLowerCase()) || (t.category || "").toLowerCase().includes(search.toLowerCase()) || (t.reference || "").toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === "all" || t.type === typeFilter;
-    return matchSearch && matchType;
+    const matchMonth = filterMonth === "all" || (t.date && t.date.substring(5, 7) === filterMonth.padStart(2, "0"));
+    const matchYear = filterYear === "all" || (t.date && t.date.substring(0, 4) === filterYear);
+    return matchSearch && matchType && matchMonth && matchYear;
+  });
+
+  // Running balance (sorted by date ascending for calculation)
+  const sortedForBalance = [...filtered].sort((a, b) => (a.date || "").localeCompare(b.date || ""));
+  const runningBalanceMap: Record<string, number> = {};
+  let running = 0;
+  sortedForBalance.forEach(t => {
+    running += t.type === "income" ? Number(t.amount) : -Number(t.amount);
+    runningBalanceMap[t.id] = running;
   });
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
@@ -136,8 +191,8 @@ export default function Finance() {
           </div>
         </div>
         <div className="flex gap-2">
-          <ExportButton data={transactions} filename="transactions" columns={[{ key: "date", label: "Date" }, { key: "type", label: "Type" }, { key: "amount", label: "Amount" }, { key: "category", label: "Category" }, { key: "description", label: "Description" }]} />
-          <Button size="sm" className="h-9 gap-2" onClick={() => setDialogOpen(true)}><Plus className="h-4 w-4" />Add Transaction</Button>
+          <ExportButton data={transactions} filename="transactions" columns={[{ key: "date", label: "Date" }, { key: "type", label: "Type" }, { key: "amount", label: "Amount" }, { key: "category", label: "Category" }, { key: "description", label: "Description" }, { key: "reference", label: "Reference" }]} />
+          <Button size="sm" className="h-9 gap-2" onClick={() => { setEditingId(null); setForm(emptyForm); setDialogOpen(true); }}><Plus className="h-4 w-4" />Add Transaction</Button>
         </div>
       </div>
 
@@ -305,7 +360,26 @@ export default function Finance() {
       <StatusFilter statuses={typeStatuses} selected={typeFilter} onSelect={setTypeFilter} />
 
       <Card><CardContent className="pt-6">
-        <div className="mb-4 relative max-w-sm"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search transactions..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+        <div className="flex flex-col sm:flex-row gap-3 mb-4">
+          <div className="relative flex-1 max-w-sm"><Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search transactions..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+          {/* Month/Year Filters */}
+          <Select value={filterMonth} onValueChange={setFilterMonth}>
+            <SelectTrigger className="w-36 h-9"><SelectValue placeholder="Month" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Months</SelectItem>
+              {["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"].map((m, i) => (
+                <SelectItem key={i} value={String(i + 1).padStart(2, "0")}>{m}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={filterYear} onValueChange={setFilterYear}>
+            <SelectTrigger className="w-28 h-9"><SelectValue placeholder="Year" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {availableYears.map(y => <SelectItem key={y} value={y}>{y}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
         {isLoading ? (
           <div className="flex justify-center p-8">
             <div className="h-8 w-8 border-2 border-primary border-t-transparent rounded-full animate-spin" />
@@ -316,40 +390,50 @@ export default function Finance() {
               <SortableHeader label="Date" sortKey="date" direction={getSortDirection("date")} onToggle={toggleSort} />
               <SortableHeader label="Description" sortKey="description" direction={getSortDirection("description")} onToggle={toggleSort} />
               <SortableHeader label="Category" sortKey="category" direction={getSortDirection("category")} onToggle={toggleSort} />
+              <SortableHeader label="Reference" sortKey="reference" direction={getSortDirection("reference")} onToggle={toggleSort} />
               <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
               <SortableHeader label="Amount" sortKey="amount" direction={getSortDirection("amount")} onToggle={toggleSort} className="text-right" />
-              <SortableHeader label="" sortKey="" direction={null} onToggle={() => {}} className="w-20" />
+              <SortableHeader label="Running Balance" sortKey="" direction={null} onToggle={() => {}} className="text-right" />
+              <SortableHeader label="" sortKey="" direction={null} onToggle={() => {}} className="w-24" />
             </TableRow></TableHeader>
               <TableBody>
                 {pageData.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-12">
+                  <TableRow><TableCell colSpan={8} className="text-center py-12">
                     <div className="flex flex-col items-center gap-2">
                       <DollarSign className="h-8 w-8 text-muted-foreground/30" />
                       <p className="text-muted-foreground">No transactions found</p>
                     </div>
                   </TableCell></TableRow>
-                ) : pageData.map((t: any) => (
-                  <TableRow key={t.id} className="group hover:bg-secondary/30">
-                    <TableCell className="text-muted-foreground">{format(new Date(t.date), "dd MMM yyyy")}</TableCell>
-                    <TableCell className="font-medium">{t.description ?? "—"}</TableCell>
-                    <TableCell><Badge variant="secondary" className="border-0 text-[10px]">{t.category ?? "—"}</Badge></TableCell>
-                    <TableCell>
-                      <Badge variant="secondary" className={`border-0 ${t.type === "income" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
-                        {t.type === "income" ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
-                        {t.type}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className={`text-right font-semibold tabular-nums ${t.type === "income" ? "text-success" : "text-destructive"}`}>
-                      {t.type === "income" ? "+" : "-"}AED {Number(t.amount).toLocaleString()}
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewItem(t)}><Eye className="h-4 w-4" /></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(t.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
+                ) : pageData.map((t: any) => {
+                  const bal = runningBalanceMap[t.id] ?? 0;
+                  return (
+                    <TableRow key={t.id} className="group hover:bg-secondary/30">
+                      <TableCell className="text-muted-foreground">{format(new Date(t.date), "dd MMM yyyy")}</TableCell>
+                      <TableCell className="font-medium">{t.description ?? "—"}</TableCell>
+                      <TableCell><Badge variant="secondary" className="border-0 text-[10px]">{t.category ?? "—"}</Badge></TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{t.reference ?? "—"}</TableCell>
+                      <TableCell>
+                        <Badge variant="secondary" className={`border-0 ${t.type === "income" ? "bg-success/15 text-success" : "bg-destructive/15 text-destructive"}`}>
+                          {t.type === "income" ? <ArrowUpRight className="h-3 w-3 mr-1" /> : <ArrowDownRight className="h-3 w-3 mr-1" />}
+                          {t.type}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className={`text-right font-semibold tabular-nums ${t.type === "income" ? "text-success" : "text-destructive"}`}>
+                        {t.type === "income" ? "+" : "-"}AED {Number(t.amount).toLocaleString()}
+                      </TableCell>
+                      <TableCell className={`text-right tabular-nums text-xs font-medium ${bal >= 0 ? "text-success" : "text-destructive"}`}>
+                        AED {bal.toLocaleString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setViewItem(t)}><Eye className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(t)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setDeleteId(t.id)}><Trash2 className="h-4 w-4 text-destructive" /></Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
               </TableBody>
             </Table>
             <DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} />
@@ -357,9 +441,9 @@ export default function Finance() {
         )}
       </CardContent></Card>
 
-      {/* Add Transaction Dialog */}
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}><DialogContent>
-        <DialogHeader><DialogTitle>New Transaction</DialogTitle></DialogHeader>
+      {/* Add/Edit Transaction Dialog */}
+      <Dialog open={dialogOpen} onOpenChange={o => { setDialogOpen(o); if (!o) { setEditingId(null); setForm(emptyForm); } }}><DialogContent>
+        <DialogHeader><DialogTitle>{editingId ? "Edit Transaction" : "New Transaction"}</DialogTitle></DialogHeader>
         <div className="space-y-4 pt-2">
           <div>
             <Label>Type</Label>
@@ -375,9 +459,11 @@ export default function Finance() {
           <div><Label>Amount (AED)</Label><Input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: e.target.value })} placeholder="0.00" /></div>
           <div><Label>Category</Label><ComboboxSelect value={form.category} onValueChange={v => setForm({ ...form, category: v })} options={form.type === "income" ? incomeCategories : expenseCategories} /></div>
           <div><Label>Date</Label><Input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></div>
+          <div><Label>Reference <span className="text-muted-foreground text-xs">(Invoice #, PO #, etc.)</span></Label><Input value={form.reference} onChange={e => setForm({ ...form, reference: e.target.value })} placeholder="e.g. INV-001, PO-2024" /></div>
+          <div><Label>Receipt URL <span className="text-muted-foreground text-xs">(link to document)</span></Label><Input value={form.receipt_url} onChange={e => setForm({ ...form, receipt_url: e.target.value })} placeholder="https://..." /></div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} rows={2} placeholder="Optional notes..." /></div>
-          <Button onClick={() => addTransaction.mutate()} className="w-full h-9" disabled={!form.amount || !form.category || addTransaction.isPending}>
-            {addTransaction.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />}Save Transaction
+          <Button onClick={() => saveTransaction.mutate()} className="w-full h-9" disabled={!form.amount || !form.category || saveTransaction.isPending}>
+            {saveTransaction.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />}{editingId ? "Update Transaction" : "Save Transaction"}
           </Button>
         </div>
       </DialogContent></Dialog>
@@ -403,8 +489,11 @@ export default function Finance() {
             <div className="grid grid-cols-2 gap-3">
               <div><p className="text-xs text-muted-foreground">Date</p><p className="text-sm font-medium">{format(new Date(viewItem.date), "dd MMM yyyy")}</p></div>
               <div><p className="text-xs text-muted-foreground">Category</p><p className="text-sm font-medium">{viewItem.category}</p></div>
+              {viewItem.reference && <div><p className="text-xs text-muted-foreground">Reference</p><p className="text-sm font-medium">{viewItem.reference}</p></div>}
+              {viewItem.receipt_url && <div><p className="text-xs text-muted-foreground">Receipt</p><a href={viewItem.receipt_url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary underline">View Document</a></div>}
             </div>
             {viewItem.description && <div><p className="text-xs text-muted-foreground">Description</p><p className="text-sm">{viewItem.description}</p></div>}
+            <Button variant="outline" size="sm" className="w-full" onClick={() => { setViewItem(null); handleEdit(viewItem); }}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Transaction</Button>
           </div>
         )}
       </DialogContent></Dialog>

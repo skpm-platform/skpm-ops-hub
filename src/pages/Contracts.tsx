@@ -11,7 +11,7 @@ import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, FileText, Pencil, Trash2, Eye, AlertTriangle } from "lucide-react";
+import { Plus, Search, FileText, Pencil, Trash2, Eye, AlertTriangle, ExternalLink } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -27,7 +27,7 @@ const typeOptions = [
   { value: "service", label: "Service" }, { value: "supply", label: "Supply" },
   { value: "manpower", label: "Manpower" }, { value: "subcontract", label: "Subcontract" },
 ];
-const emptyForm = { client_id: "", type: "project", start_date: "", end_date: "", value: "", description: "", status: "active" };
+const emptyForm = { client_id: "", type: "project", start_date: "", end_date: "", value: "", description: "", status: "active", document_url: "", renewal_date: "" };
 
 export default function Contracts() {
   const qc = useQueryClient();
@@ -48,13 +48,19 @@ export default function Contracts() {
 
   const save = useMutation({
     mutationFn: async () => {
-      const payload = { ...form, value: parseFloat(form.value) || 0, client_id: form.client_id || null };
+      const payload = {
+        ...form,
+        value: parseFloat(form.value) || 0,
+        client_id: form.client_id || null,
+        document_url: form.document_url || null,
+        renewal_date: form.renewal_date || null,
+      };
       if (editingId) {
-        const { error } = await supabase.from("contracts").update(payload).eq("id", editingId);
+        const { error } = await (supabase as any).from("contracts").update(payload).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated contract", `Contract ${editingId}`);
       } else {
-        const { error } = await supabase.from("contracts").insert({ ...payload, contract_no: `CON-${Date.now().toString().slice(-6)}` });
+        const { error } = await (supabase as any).from("contracts").insert({ ...payload, contract_no: `CON-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
         await logAudit("Created contract", payload.type);
       }
@@ -75,7 +81,17 @@ export default function Contracts() {
 
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ client_id: r.client_id||"", type: r.type||"project", start_date: r.start_date||"", end_date: r.end_date||"", value: String(r.value||""), description: r.description||"", status: r.status||"active" });
+    setForm({
+      client_id: r.client_id || "",
+      type: r.type || "project",
+      start_date: r.start_date || "",
+      end_date: r.end_date || "",
+      value: String(r.value || ""),
+      description: r.description || "",
+      status: r.status || "active",
+      document_url: r.document_url || "",
+      renewal_date: r.renewal_date || "",
+    });
     setOpen(true);
   };
 
@@ -98,6 +114,14 @@ export default function Contracts() {
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
   const expiringContracts = data.filter((r: any) => r.end_date && new Date(r.end_date) < new Date(Date.now() + 90 * 86400000) && r.status === "active");
+
+  const getRowClass = (r: any) => {
+    if (!r.end_date || r.status !== "active") return "";
+    const msLeft = new Date(r.end_date).getTime() - Date.now();
+    if (msLeft < 0) return "bg-destructive/5";
+    if (msLeft < 30 * 86400000) return "bg-orange-50 dark:bg-orange-900/10";
+    return "";
+  };
 
   return (
     <div className="space-y-6">
@@ -133,7 +157,7 @@ export default function Contracts() {
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Total Value</p><p className="text-2xl font-bold">AED {totalValue.toLocaleString()}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Active Value</p><p className="text-2xl font-bold text-success">AED {activeValue.toLocaleString()}</p></CardContent></Card>
         <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Active</p><p className="text-2xl font-bold text-primary">{data.filter((r:any)=>r.status==="active").length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Expiring Soon</p><p className="text-2xl font-bold text-destructive">{expiringSoon}</p></CardContent></Card>
+        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase tracking-wider">Expiring in 30 Days</p><p className={`text-2xl font-bold ${expiringSoon > 0 ? "text-destructive" : "text-muted-foreground"}`}>{expiringSoon}</p></CardContent></Card>
       </div>
 
       <Card><CardContent className="pt-6">
@@ -154,15 +178,18 @@ export default function Contracts() {
             <SortableHeader label="Actions" sortKey="" direction={null} onToggle={() => {}} />
           </TableRow></TableHeader>
             <TableBody>{pageData.map((r: any) => {
-              const expiring = r.end_date && new Date(r.end_date) < new Date(Date.now()+30*86400000) && r.status==="active";
+              const expiring30 = r.end_date && new Date(r.end_date) < new Date(Date.now()+30*86400000) && r.status==="active";
+              const expired = r.end_date && new Date(r.end_date) < new Date() && r.status === "active";
               return (
-              <TableRow key={r.id}>
-                <TableCell className="font-mono text-xs">{r.contract_no}</TableCell>
+              <TableRow key={r.id} className={getRowClass(r)}>
+                <TableCell className="font-mono text-xs font-semibold">{r.contract_no}</TableCell>
                 <TableCell>{r.clients?.name || "—"}</TableCell>
                 <TableCell><Badge variant="outline" className="capitalize">{r.type}</Badge></TableCell>
-                <TableCell className="font-medium">{r.value?.toLocaleString()}</TableCell>
+                <TableCell className="font-medium">AED {Number(r.value || 0).toLocaleString()}</TableCell>
                 <TableCell className="text-xs">
-                  {r.start_date || "—"} – <span className={expiring ? "text-destructive font-medium" : ""}>{r.end_date || "—"}</span>
+                  {r.start_date || "—"} – <span className={expiring30 ? "text-destructive font-medium" : ""}>{r.end_date || "—"}</span>
+                  {expiring30 && !expired && <Badge variant="secondary" className="ml-1 text-[10px] bg-orange-100 text-orange-700 border-0">Expiring</Badge>}
+                  {expired && <Badge variant="destructive" className="ml-1 text-[10px]">Expired</Badge>}
                 </TableCell>
                 <TableCell><Badge variant={r.status === "active" ? "default" : "secondary"}>{r.status}</Badge></TableCell>
                 <TableCell>
@@ -180,6 +207,7 @@ export default function Contracts() {
         )}
       </CardContent></Card>
 
+      {/* Create/Edit Dialog */}
       <Dialog open={open} onOpenChange={(o)=>{setOpen(o);if(!o){setEditingId(null);setForm(emptyForm);}}}><DialogContent className="max-h-[90vh] overflow-y-auto">
         <DialogHeader><DialogTitle>{editingId ? "Edit Contract" : "New Contract"}</DialogTitle></DialogHeader>
         <div className="space-y-4">
@@ -191,21 +219,37 @@ export default function Contracts() {
             <div><Label>Start</Label><Input type="date" value={form.start_date} onChange={e => setForm({...form, start_date: e.target.value})} /></div>
             <div><Label>End</Label><Input type="date" value={form.end_date} onChange={e => setForm({...form, end_date: e.target.value})} /></div>
           </div>
+          <div><Label>Renewal Date</Label><Input type="date" value={form.renewal_date} onChange={e => setForm({...form, renewal_date: e.target.value})} /></div>
+          <div><Label>Document URL <span className="text-muted-foreground text-xs">(link to contract document)</span></Label><Input value={form.document_url} onChange={e => setForm({...form, document_url: e.target.value})} placeholder="https://..." /></div>
           <div><Label>Description</Label><Textarea value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Contract"}</Button>
         </div>
       </DialogContent></Dialog>
 
+      {/* View Dialog */}
       <Dialog open={viewOpen} onOpenChange={setViewOpen}><DialogContent className="max-w-md">
         <DialogHeader><DialogTitle>Contract Details</DialogTitle></DialogHeader>
         {viewing && (
           <div className="space-y-3 text-sm">
+            <div className="pb-2 border-b">
+              <p className="font-mono text-lg font-bold text-primary">{viewing.contract_no}</p>
+              <p className="text-muted-foreground text-sm">{viewing.clients?.name || "No Client"}</p>
+            </div>
             <div className="grid grid-cols-2 gap-3">
-              {[["Contract#",viewing.contract_no],["Client",viewing.clients?.name],["Type",viewing.type],["Value",`AED ${viewing.value?.toLocaleString()}`],["Start",viewing.start_date],["End",viewing.end_date],["Auto Renew",viewing.auto_renew?"Yes":"No"],["Status",viewing.status]].map(([l,v])=>(
-                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v||"—"}</p></div>
+              {[["Type", viewing.type], ["Value", `AED ${Number(viewing.value || 0).toLocaleString()}`], ["Start", viewing.start_date], ["End", viewing.end_date], ["Renewal Date", viewing.renewal_date], ["Auto Renew", viewing.auto_renew ? "Yes" : "No"], ["Status", viewing.status]].map(([l, v]) => (
+                <div key={l as string}><p className="text-muted-foreground text-xs">{l}</p><p className="font-medium capitalize">{v || "—"}</p></div>
               ))}
             </div>
             {viewing.description && <div><p className="text-muted-foreground text-xs">Description</p><p>{viewing.description}</p></div>}
+            {viewing.document_url && (
+              <div>
+                <p className="text-muted-foreground text-xs">Contract Document</p>
+                <a href={viewing.document_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary underline text-sm mt-0.5">
+                  <ExternalLink className="h-3 w-3" />View Document
+                </a>
+              </div>
+            )}
+            <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => { setViewOpen(false); handleEdit(viewing); }}><Pencil className="h-3.5 w-3.5 mr-2" />Edit Contract</Button>
           </div>
         )}
       </DialogContent></Dialog>

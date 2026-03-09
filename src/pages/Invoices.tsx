@@ -9,11 +9,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
+import { Textarea } from "@/components/ui/textarea";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Receipt, Pencil, Trash2, Eye, Printer, TrendingUp, AlertTriangle, CheckCircle, Clock, FileText, LayoutGrid, List } from "lucide-react";
+import { Plus, Search, Receipt, Pencil, Trash2, Eye, Printer, TrendingUp, AlertTriangle, CheckCircle, Clock, FileText, LayoutGrid, List, Send } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -30,7 +31,7 @@ const statusStyles: Record<string, { bg: string; icon: any }> = {
   paid: { bg: "bg-success/15 text-success", icon: CheckCircle },
   overdue: { bg: "bg-destructive/15 text-destructive", icon: AlertTriangle },
 };
-const emptyForm = { client_id: "", due_date: "", subtotal: "", status: "draft" };
+const emptyForm = { client_id: "", due_date: "", subtotal: "", status: "draft", payment_terms: "30", notes: "" };
 
 export default function Invoices() {
   const { user } = useAuth();
@@ -45,22 +46,30 @@ export default function Invoices() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data = [], isLoading } = useQuery({
+  const { data: rawData = [], isLoading } = useQuery({
     queryKey: ["invoices"],
     queryFn: async () => { const { data } = await supabase.from("invoices").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
   const { data: clients = [] } = useQuery({ queryKey: ["clients-inv"], queryFn: async () => { const { data } = await supabase.from("clients").select("id,name"); return data || []; } });
+
+  // Compute overdue status client-side
+  const data = rawData.map((r: any) => {
+    if (r.status !== "paid" && r.due_date && new Date(r.due_date) < new Date()) {
+      return { ...r, status: "overdue" };
+    }
+    return r;
+  });
 
   const save = useMutation({
     mutationFn: async () => {
       const sub = parseFloat(form.subtotal) || 0;
       const vat = sub * 0.05;
       if (editingId) {
-        const { error } = await supabase.from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status }).eq("id", editingId);
+        const { error } = await (supabase as any).from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status, payment_terms: form.payment_terms || null, notes: form.notes || null }).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated invoice", editingId);
       } else {
-        const { error } = await supabase.from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null });
+        const { error } = await (supabase as any).from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null, payment_terms: form.payment_terms || null, notes: form.notes || null });
         if (error) throw error;
         await logAudit("Created invoice", `AED ${(sub + vat).toLocaleString()}`);
       }
@@ -79,10 +88,80 @@ export default function Invoices() {
     onError: (e: any) => toast.error(e.message),
   });
 
+  const updateStatus = useMutation({
+    mutationFn: async ({ id, status }: { id: string; status: string }) => {
+      const { error } = await (supabase as any).from("invoices").update({ status }).eq("id", id);
+      if (error) throw error;
+      await logAudit("Updated invoice status", `${id} → ${status}`);
+    },
+    onSuccess: (_, { status }) => {
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+      toast.success(`Marked as ${status}`);
+      // Update viewing state too
+      setViewing((prev: any) => prev ? { ...prev, status } : null);
+    },
+    onError: (e: any) => toast.error(e.message),
+  });
+
   const handleEdit = (r: any) => {
     setEditingId(r.id);
-    setForm({ client_id: r.client_id || "", due_date: r.due_date || "", subtotal: String(r.subtotal || ""), status: r.status || "draft" });
+    setForm({ client_id: r.client_id || "", due_date: r.due_date || "", subtotal: String(r.subtotal || ""), status: r.status || "draft", payment_terms: r.payment_terms || "30", notes: r.notes || "" });
     setOpen(true);
+  };
+
+  const printInvoice = (r: any) => {
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`<!DOCTYPE html><html><head><title>Invoice ${r.invoice_no}</title>
+<style>
+  body { font-family: Arial, sans-serif; max-width: 700px; margin: 40px auto; color: #333; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; border-bottom: 2px solid #333; padding-bottom: 16px; }
+  .company { font-size: 24px; font-weight: bold; color: #1a1a2e; }
+  .invoice-title { font-size: 32px; font-weight: bold; color: #4f46e5; }
+  .invoice-no { font-size: 18px; color: #666; margin-top: 4px; }
+  .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 32px; }
+  .info-block label { font-size: 11px; text-transform: uppercase; color: #888; letter-spacing: 0.05em; }
+  .info-block p { font-size: 15px; font-weight: 600; margin-top: 4px; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 24px; }
+  th { background: #f5f5f5; padding: 10px 12px; text-align: left; font-size: 12px; text-transform: uppercase; color: #666; }
+  td { padding: 12px; border-bottom: 1px solid #eee; font-size: 14px; }
+  .totals { max-width: 300px; margin-left: auto; }
+  .totals tr td { border: none; padding: 6px 12px; }
+  .total-row td { font-size: 18px; font-weight: bold; border-top: 2px solid #333 !important; padding-top: 12px !important; }
+  .status { display: inline-block; padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; text-transform: uppercase; }
+  .status-paid { background: #d1fae5; color: #065f46; }
+  .status-sent { background: #e0e7ff; color: #3730a3; }
+  .status-draft { background: #f3f4f6; color: #374151; }
+  .status-overdue { background: #fee2e2; color: #991b1b; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<div class="header">
+  <div><div class="company">SKPM Operations</div><div style="color:#666;font-size:13px;margin-top:4px;">skpm@example.com</div></div>
+  <div style="text-align:right"><div class="invoice-title">INVOICE</div><div class="invoice-no">${r.invoice_no}</div></div>
+</div>
+<div class="info-grid">
+  <div class="info-block"><label>Bill To</label><p>${r.clients?.name || "—"}</p></div>
+  <div class="info-block"><label>Status</label><p><span class="status status-${r.status}">${r.status}</span></p></div>
+  <div class="info-block"><label>Issue Date</label><p>${r.issue_date ? format(new Date(r.issue_date), "dd MMM yyyy") : format(new Date(), "dd MMM yyyy")}</p></div>
+  <div class="info-block"><label>Due Date</label><p>${r.due_date ? format(new Date(r.due_date), "dd MMM yyyy") : "—"}</p></div>
+  ${r.payment_terms ? `<div class="info-block"><label>Payment Terms</label><p>${r.payment_terms === "immediate" ? "Immediate" : `Net ${r.payment_terms} Days`}</p></div>` : ""}
+</div>
+<table>
+  <thead><tr><th>Description</th><th style="text-align:right">Amount</th></tr></thead>
+  <tbody>
+    <tr><td>Professional Services</td><td style="text-align:right">AED ${Number(r.subtotal).toLocaleString()}</td></tr>
+  </tbody>
+</table>
+<table class="totals">
+  <tr><td style="color:#666">Subtotal</td><td style="text-align:right">AED ${Number(r.subtotal).toLocaleString()}</td></tr>
+  <tr><td style="color:#666">VAT (5%)</td><td style="text-align:right">AED ${Number(r.vat).toLocaleString()}</td></tr>
+  <tr class="total-row"><td>Total</td><td style="text-align:right">AED ${Number(r.total).toLocaleString()}</td></tr>
+</table>
+${r.notes ? `<div style="margin-top:24px;padding:16px;background:#f9fafb;border-radius:8px;"><strong>Notes:</strong><p style="margin-top:8px;color:#555">${r.notes}</p></div>` : ""}
+<div style="margin-top:40px;text-align:center;color:#aaa;font-size:12px;border-top:1px solid #eee;padding-top:16px;">Thank you for your business</div>
+</body></html>`);
+    win.document.close();
+    win.print();
   };
 
   const filtered = data.filter((r: any) => {
@@ -301,6 +380,18 @@ export default function Invoices() {
             )}
           </div>
           <div><Label>Due Date</Label><Input type="date" value={form.due_date} onChange={e => setForm({ ...form, due_date: e.target.value })} /></div>
+          <div>
+            <Label>Payment Terms</Label>
+            <Select value={form.payment_terms} onValueChange={v => setForm({ ...form, payment_terms: v })}>
+              <SelectTrigger><SelectValue placeholder="Select terms" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="immediate">Immediate</SelectItem>
+                <SelectItem value="30">Net 30 Days</SelectItem>
+                <SelectItem value="60">Net 60 Days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div><Label>Notes</Label><Textarea value={form.notes} onChange={e => setForm({ ...form, notes: e.target.value })} rows={2} placeholder="Invoice-specific notes..." /></div>
           {editingId && <div><Label>Status</Label><Select value={form.status} onValueChange={v => setForm({ ...form, status: v })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent><SelectItem value="draft">Draft</SelectItem><SelectItem value="sent">Sent</SelectItem><SelectItem value="paid">Paid</SelectItem><SelectItem value="overdue">Overdue</SelectItem></SelectContent></Select></div>}
           <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Create Invoice"}</Button>
         </div>
@@ -311,11 +402,11 @@ export default function Invoices() {
         <DialogHeader>
           <DialogTitle className="flex items-center justify-between">
             Invoice Details
-            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => window.print()}><Printer className="h-3 w-3" />Print</Button>
+            <Button variant="outline" size="sm" className="h-7 gap-1 text-xs" onClick={() => viewing && printInvoice(viewing)}><Printer className="h-3 w-3" />Print</Button>
           </DialogTitle>
         </DialogHeader>
         {viewing && (
-          <div className="space-y-4 text-sm" id="invoice-print">
+          <div className="space-y-4 text-sm">
             <div className="flex items-center justify-between pb-3 border-b">
               <div>
                 <p className="font-mono text-lg font-bold">{viewing.invoice_no}</p>
@@ -329,13 +420,27 @@ export default function Invoices() {
               <div><p className="text-muted-foreground text-xs">Issue Date</p><p className="font-medium">{viewing.issue_date ? format(new Date(viewing.issue_date), "dd MMM yyyy") : "—"}</p></div>
               <div><p className="text-muted-foreground text-xs">Due Date</p><p className="font-medium">{viewing.due_date ? format(new Date(viewing.due_date), "dd MMM yyyy") : "—"}</p></div>
               <div><p className="text-muted-foreground text-xs">Payment Method</p><p className="font-medium capitalize">{viewing.payment_method || "—"}</p></div>
-              <div><p className="text-muted-foreground text-xs">Paid Date</p><p className="font-medium">{viewing.paid_date ? format(new Date(viewing.paid_date), "dd MMM yyyy") : "—"}</p></div>
+              <div><p className="text-muted-foreground text-xs">Payment Terms</p><p className="font-medium">{viewing.payment_terms === "immediate" ? "Immediate" : viewing.payment_terms ? `Net ${viewing.payment_terms} Days` : "—"}</p></div>
             </div>
             <div className="p-3 bg-muted rounded-lg space-y-2">
               <div className="flex justify-between text-xs"><span className="text-muted-foreground">Subtotal</span><span>AED {viewing.subtotal?.toLocaleString()}</span></div>
               <div className="flex justify-between text-xs"><span className="text-muted-foreground">VAT (5%)</span><span>AED {viewing.vat?.toLocaleString()}</span></div>
               <Separator />
               <div className="flex justify-between font-bold"><span>Total</span><span>AED {viewing.total?.toLocaleString()}</span></div>
+            </div>
+            {viewing.notes && <div><p className="text-muted-foreground text-xs">Notes</p><p className="text-sm">{viewing.notes}</p></div>}
+            {/* Status workflow buttons */}
+            <div className="flex gap-2 flex-wrap pt-2 border-t">
+              {viewing.status === "draft" && (
+                <Button size="sm" className="h-8 gap-1.5 text-xs" variant="outline" onClick={() => updateStatus.mutate({ id: viewing.id, status: "sent" })} disabled={updateStatus.isPending}>
+                  <Send className="h-3 w-3" />Mark as Sent
+                </Button>
+              )}
+              {(viewing.status === "draft" || viewing.status === "sent" || viewing.status === "overdue") && (
+                <Button size="sm" className="h-8 gap-1.5 text-xs bg-success hover:bg-success/90 text-white" onClick={() => updateStatus.mutate({ id: viewing.id, status: "paid" })} disabled={updateStatus.isPending}>
+                  <CheckCircle className="h-3 w-3" />Mark as Paid
+                </Button>
+              )}
             </div>
           </div>
         )}
