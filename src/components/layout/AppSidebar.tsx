@@ -32,6 +32,7 @@ const navGroups: NavGroup[] = [
   { label: "Overview", items: [
     { title: "Dashboard", url: "/", icon: LayoutDashboard },
     { title: "My Profile", url: "/my-profile", icon: UserCircle },
+    { title: "Approvals", url: "/approvals", icon: ClipboardCheck, managerUp: true, badgeKey: "pendingApprovals" },
   ]},
   { label: "Operations", items: [
     { title: "Projects", url: "/projects", icon: FolderKanban },
