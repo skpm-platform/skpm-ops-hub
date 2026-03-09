@@ -12,9 +12,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Plus, Search, Loader2, UserMinus, CheckCircle, XCircle } from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Plus, Search, Loader2, UserMinus, CheckCircle, XCircle, CalendarDays, Clock, TrendingUp, LayoutGrid, List } from "lucide-react";
 import { toast } from "sonner";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
@@ -23,6 +25,16 @@ import { ComboboxSelect } from "@/components/ComboboxSelect";
 import { StatusFilter, buildStatuses } from "@/components/StatusFilter";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 
+const leaveTypeColors: Record<string, string> = {
+  annual: "bg-primary/15 text-primary",
+  sick: "bg-destructive/15 text-destructive",
+  emergency: "bg-warning/15 text-warning",
+  unpaid: "bg-muted text-muted-foreground",
+  maternity: "bg-accent text-accent-foreground",
+  paternity: "bg-accent text-accent-foreground",
+  compassionate: "bg-secondary text-secondary-foreground",
+};
+
 export default function LeaveManagement() {
   const { user } = useAuth();
   const { data: role } = useUserRole();
@@ -30,6 +42,7 @@ export default function LeaveManagement() {
   const qc = useQueryClient();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
   const [open, setOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<{ id: string; status: string } | null>(null);
   const [form, setForm] = useState({ type: "annual", start_date: "", end_date: "", days: 1, reason: "" });
@@ -64,10 +77,15 @@ export default function LeaveManagement() {
     onError: (e: any) => toast.error(e.message),
   });
 
-  const statusColor = (s: string) => { if (s === "approved") return "bg-success/15 text-success border-0"; if (s === "rejected") return "bg-destructive/15 text-destructive border-0"; return "bg-warning/15 text-warning border-0"; };
+  const statusColor = (s: string) => {
+    if (s === "approved") return "bg-success/15 text-success border-0";
+    if (s === "rejected") return "bg-destructive/15 text-destructive border-0";
+    return "bg-warning/15 text-warning border-0";
+  };
+
   const statusCounts: Record<string, number> = {};
   leaves.forEach((l: any) => { statusCounts[l.status ?? "pending"] = (statusCounts[l.status ?? "pending"] || 0) + 1; });
-  const statuses = buildStatuses(statusCounts, ["pending","approved","rejected"]);
+  const statuses = buildStatuses(statusCounts, ["pending", "approved", "rejected"]);
 
   const filtered = leaves.filter((l: any) => {
     const matchSearch = l.type?.toLowerCase().includes(search.toLowerCase()) || l.reason?.toLowerCase().includes(search.toLowerCase()) || l.employees?.name?.toLowerCase().includes(search.toLowerCase());
@@ -76,9 +94,25 @@ export default function LeaveManagement() {
   });
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
 
-  const pendingCount = leaves.filter((l:any) => l.status === "pending").length;
-  const approvedCount = leaves.filter((l:any) => l.status === "approved").length;
-  const totalDays = leaves.filter((l:any) => l.status === "approved").reduce((s:number, l:any) => s + (l.days || 0), 0);
+  const pendingCount = leaves.filter((l: any) => l.status === "pending").length;
+  const approvedCount = leaves.filter((l: any) => l.status === "approved").length;
+  const rejectedCount = leaves.filter((l: any) => l.status === "rejected").length;
+  const totalDays = leaves.filter((l: any) => l.status === "approved").reduce((s: number, l: any) => s + (l.days || 0), 0);
+
+  // Leave type breakdown
+  const typeCounts: Record<string, number> = {};
+  leaves.filter((l: any) => l.status === "approved").forEach((l: any) => { typeCounts[l.type || "other"] = (typeCounts[l.type || "other"] || 0) + (l.days || 0); });
+  const typeBreakdown = Object.entries(typeCounts).sort(([, a], [, b]) => b - a);
+
+  // Auto-calculate days when dates change
+  const handleDateChange = (field: "start_date" | "end_date", value: string) => {
+    const newForm = { ...form, [field]: value };
+    if (newForm.start_date && newForm.end_date) {
+      const diff = differenceInDays(new Date(newForm.end_date), new Date(newForm.start_date)) + 1;
+      if (diff > 0) newForm.days = diff;
+    }
+    setForm(newForm);
+  };
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -98,8 +132,8 @@ export default function LeaveManagement() {
                   <ComboboxSelect value={form.type} onChange={v => setForm(f => ({ ...f, type: v }))} options={["annual","sick","emergency","unpaid","maternity","paternity","compassionate"]} placeholder="Select type" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
-                  <div className="space-y-2"><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
+                  <div className="space-y-2"><Label>Start Date</Label><Input type="date" value={form.start_date} onChange={e => handleDateChange("start_date", e.target.value)} /></div>
+                  <div className="space-y-2"><Label>End Date</Label><Input type="date" value={form.end_date} onChange={e => handleDateChange("end_date", e.target.value)} /></div>
                 </div>
                 <div className="space-y-2"><Label>Days</Label><Input type="number" min={1} value={form.days} onChange={e => setForm(f => ({ ...f, days: Number(e.target.value) }))} /></div>
                 <div className="space-y-2"><Label>Reason</Label><Textarea placeholder="Reason for leave..." value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
@@ -112,55 +146,181 @@ export default function LeaveManagement() {
         </div>
       </div>
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Total Requests</p><p className="text-2xl font-bold">{leaves.length}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Pending</p><p className="text-2xl font-bold text-warning">{pendingCount}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Approved</p><p className="text-2xl font-bold text-success">{approvedCount}</p></CardContent></Card>
-        <Card><CardContent className="p-4"><p className="text-xs text-muted-foreground uppercase">Days Used</p><p className="text-2xl font-bold">{totalDays}</p></CardContent></Card>
+      {/* Enhanced KPI Cards */}
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Total Requests</p>
+                <p className="text-2xl font-bold">{leaves.length}</p>
+              </div>
+              <CalendarDays className="h-5 w-5 text-primary" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Pending</p>
+                <p className="text-2xl font-bold text-warning">{pendingCount}</p>
+              </div>
+              <Clock className="h-5 w-5 text-warning" />
+            </div>
+            {isManagerUp && pendingCount > 0 && <p className="text-[10px] text-warning mt-1">Action required</p>}
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Approved</p>
+                <p className="text-2xl font-bold text-success">{approvedCount}</p>
+              </div>
+              <CheckCircle className="h-5 w-5 text-success" />
+            </div>
+            {leaves.length > 0 && <Progress value={(approvedCount / leaves.length) * 100} className="mt-2 h-1" />}
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase">Rejected</p>
+                <p className="text-2xl font-bold text-destructive">{rejectedCount}</p>
+              </div>
+              <XCircle className="h-5 w-5 text-destructive" />
+            </div>
+          </CardContent>
+        </Card>
+        <Card className="hover:shadow-md transition-shadow col-span-2 lg:col-span-1">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground uppercase">Days Used (Approved)</p>
+            <p className="text-2xl font-bold mt-1">{totalDays}</p>
+            {typeBreakdown.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {typeBreakdown.slice(0, 3).map(([type, days]) => (
+                  <div key={type} className="flex items-center justify-between text-[10px]">
+                    <span className="capitalize text-muted-foreground">{type}</span>
+                    <span className="font-medium">{days}d</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
-      <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
+      {/* Pending Approvals Banner for Managers */}
+      {isManagerUp && pendingCount > 0 && (
+        <Card className="border-warning/30 bg-warning/5">
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-warning" />
+                <span className="text-sm font-semibold">{pendingCount} pending leave request{pendingCount > 1 ? "s" : ""} awaiting your approval</span>
+              </div>
+              <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setStatusFilter("pending")}>Review Now</Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
-      <div className="relative max-w-sm"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9" placeholder="Search leaves..." value={search} onChange={e => setSearch(e.target.value)} /></div>
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader><TableRow>
-            <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
-            <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
-            <SortableHeader label="From" sortKey="start_date" direction={getSortDirection("start_date")} onToggle={toggleSort} />
-            <SortableHeader label="To" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
-            <SortableHeader label="Days" sortKey="days" direction={getSortDirection("days")} onToggle={toggleSort} />
-            <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
-            <TableHead className="w-32">Actions</TableHead>
-          </TableRow></TableHeader>
-          <TableBody>
-            {isLoading ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">Loading...</TableCell></TableRow> :
-            filtered.length === 0 ? <TableRow><TableCell colSpan={7} className="text-center text-muted-foreground py-8">No leave requests</TableCell></TableRow> :
-            pageData.map((l: any) => (
-              <TableRow key={l.id}>
-                <TableCell className="font-medium">{l.employees?.name ?? "—"}</TableCell>
-                <TableCell><Badge variant="secondary" className="capitalize border-0">{l.type}</Badge></TableCell>
-                <TableCell>{l.start_date ? format(new Date(l.start_date), "dd MMM yyyy") : "—"}</TableCell>
-                <TableCell>{l.end_date ? format(new Date(l.end_date), "dd MMM yyyy") : "—"}</TableCell>
-                <TableCell className="font-medium">{l.days}</TableCell>
-                <TableCell><Badge variant="secondary" className={statusColor(l.status)}>{l.status}</Badge></TableCell>
-                <TableCell>
-                  {l.status === "pending" && isManagerUp && (
-                    <div className="flex gap-1">
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
-                      <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
-                    </div>
-                  )}
-                  {l.status === "pending" && !isManagerUp && (
-                    <span className="text-xs text-muted-foreground">Awaiting approval</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-        <div className="p-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
+      <div className="flex flex-col sm:flex-row gap-3">
+        <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
+        <div className="flex items-center gap-2 ml-auto">
+          <div className="relative max-w-xs"><Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" /><Input className="pl-9 h-9" placeholder="Search leaves..." value={search} onChange={e => setSearch(e.target.value)} /></div>
+          <div className="flex border rounded-md">
+            <Button variant={viewMode === "table" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-r-none" onClick={() => setViewMode("table")}><List className="h-4 w-4" /></Button>
+            <Button variant={viewMode === "cards" ? "secondary" : "ghost"} size="icon" className="h-9 w-9 rounded-l-none" onClick={() => setViewMode("cards")}><LayoutGrid className="h-4 w-4" /></Button>
+          </div>
+        </div>
       </div>
+
+      {isLoading ? (
+        <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <Card><CardContent className="py-8 text-center text-muted-foreground">No leave requests found</CardContent></Card>
+      ) : viewMode === "cards" ? (
+        /* Card View */
+        <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {pageData.map((l: any) => (
+            <Card key={l.id} className="group hover:shadow-md transition-all hover:-translate-y-0.5">
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between mb-3">
+                  <div>
+                    <h3 className="font-semibold text-sm">{l.employees?.name ?? "Unknown"}</h3>
+                    <Badge variant="secondary" className={`mt-1 capitalize text-[10px] border-0 ${leaveTypeColors[l.type] || ""}`}>{l.type}</Badge>
+                  </div>
+                  <Badge variant="secondary" className={`${statusColor(l.status)} text-[10px]`}>{l.status}</Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-xs mb-3">
+                  <div>
+                    <span className="text-muted-foreground">From:</span>
+                    <p className="font-medium">{l.start_date ? format(new Date(l.start_date), "dd MMM yyyy") : "—"}</p>
+                  </div>
+                  <div>
+                    <span className="text-muted-foreground">To:</span>
+                    <p className="font-medium">{l.end_date ? format(new Date(l.end_date), "dd MMM yyyy") : "—"}</p>
+                  </div>
+                </div>
+                <div className="flex items-center justify-between text-xs">
+                  <span className="text-muted-foreground">{l.days} day{l.days !== 1 ? "s" : ""}</span>
+                  {l.reason && <span className="text-muted-foreground truncate max-w-[120px]">{l.reason}</span>}
+                </div>
+                {l.status === "pending" && isManagerUp && (
+                  <div className="flex gap-1.5 mt-3 pt-3 border-t">
+                    <Button size="sm" className="h-7 text-xs gap-1 flex-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
+                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1 flex-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="mt-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
+        </>
+      ) : (
+        /* Table View */
+        <div className="rounded-lg border bg-card">
+          <Table>
+            <TableHeader><TableRow>
+              <SortableHeader label="Employee" sortKey="employees.name" direction={getSortDirection("employees.name")} onToggle={toggleSort} />
+              <SortableHeader label="Type" sortKey="type" direction={getSortDirection("type")} onToggle={toggleSort} />
+              <SortableHeader label="From" sortKey="start_date" direction={getSortDirection("start_date")} onToggle={toggleSort} />
+              <SortableHeader label="To" sortKey="end_date" direction={getSortDirection("end_date")} onToggle={toggleSort} />
+              <SortableHeader label="Days" sortKey="days" direction={getSortDirection("days")} onToggle={toggleSort} />
+              <SortableHeader label="Status" sortKey="status" direction={getSortDirection("status")} onToggle={toggleSort} />
+              <TableHead className="w-32">Actions</TableHead>
+            </TableRow></TableHeader>
+            <TableBody>
+              {pageData.map((l: any) => (
+                <TableRow key={l.id} className="group">
+                  <TableCell className="font-medium">{l.employees?.name ?? "—"}</TableCell>
+                  <TableCell><Badge variant="secondary" className={`capitalize border-0 text-[10px] ${leaveTypeColors[l.type] || ""}`}>{l.type}</Badge></TableCell>
+                  <TableCell>{l.start_date ? format(new Date(l.start_date), "dd MMM yyyy") : "—"}</TableCell>
+                  <TableCell>{l.end_date ? format(new Date(l.end_date), "dd MMM yyyy") : "—"}</TableCell>
+                  <TableCell className="font-medium">{l.days}</TableCell>
+                  <TableCell><Badge variant="secondary" className={statusColor(l.status)}>{l.status}</Badge></TableCell>
+                  <TableCell>
+                    {l.status === "pending" && isManagerUp ? (
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setConfirmAction({ id: l.id, status: "approved" })}><CheckCircle className="h-3 w-3" /> Approve</Button>
+                        <Button size="sm" variant="outline" className="h-7 text-xs gap-1 text-destructive" onClick={() => setConfirmAction({ id: l.id, status: "rejected" })}><XCircle className="h-3 w-3" /> Reject</Button>
+                      </div>
+                    ) : l.status === "pending" ? (
+                      <span className="text-xs text-muted-foreground">Awaiting approval</span>
+                    ) : null}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+          <div className="p-4"><DataTablePagination page={page} totalPages={totalPages} totalItems={totalItems} pageSize={pageSize} onPageChange={setPage} /></div>
+        </div>
+      )}
 
       <ConfirmDialog
         open={!!confirmAction}
