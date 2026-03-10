@@ -58,7 +58,11 @@ export function InviteDialog({ open, onOpenChange }: InviteDialogProps) {
   const roleInfo = ROLE_INFO[form.role as keyof typeof ROLE_INFO] || ROLE_INFO.staff;
   const RoleIcon = roleInfo.icon;
 
-  const signupUrl = `${window.location.origin}/auth`;
+  const previewUrl = `${window.location.origin}/accept-invite`;
+  const inviteToken = createdInvite?.token || "";
+  const signupUrl = inviteToken
+    ? `${window.location.origin}/accept-invite?token=${inviteToken}`
+    : previewUrl;
 
   // WhatsApp formatted message
   const getWhatsAppMessage = () => {
@@ -287,7 +291,7 @@ Powered by SKPM Ops Hub`
                 )}
                 <div className="flex items-center gap-2 bg-blue-600 text-white rounded-lg px-3 py-2 text-xs font-medium w-fit">
                   <ExternalLink className="h-3 w-3" />
-                  Get Started → {signupUrl}
+                  Get Started → {previewUrl}
                 </div>
                 <p className="text-xs text-muted-foreground">Sign up using: <strong>{form.email || "email@company.com"}</strong></p>
               </div>
@@ -480,7 +484,7 @@ Powered by SKPM Ops Hub`
                     <code className="text-xs font-mono text-foreground flex-1 break-all">{signupUrl}</code>
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Tell them to use <strong>{form.email}</strong> when signing up
+                    🔒 This link is unique and locked to <strong>{form.email}</strong> — only they can use it
                   </p>
                 </div>
                 <Button
