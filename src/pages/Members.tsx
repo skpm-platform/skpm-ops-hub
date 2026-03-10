@@ -21,6 +21,7 @@ import {
   Trash2, KeyRound, RefreshCw, XCircle, AlertTriangle, Shield, Settings2,
   UserCheck, UserX, ChevronDown, ChevronUp, Lock
 } from "lucide-react";
+import { InviteDialog } from "@/components/InviteDialog";
 import { PhotoUpload } from "@/components/PhotoUpload";
 import { PermissionsMatrix } from "@/components/PermissionsMatrix";
 import { toast } from "sonner";
@@ -70,7 +71,6 @@ export default function Members() {
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [showModuleOverrides, setShowModuleOverrides] = useState(false);
   const [form, setForm] = useState({ name: "", status: "active", avatar_url: "", role: "staff" });
-  const [inviteForm, setInviteForm] = useState({ email: "", role: "staff" });
   const [deletingMember, setDeletingMember] = useState<any>(null);
 
   const { data: profiles = [], isLoading } = useQuery({
@@ -200,27 +200,6 @@ export default function Members() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const sendInvite = useMutation({
-    mutationFn: async () => {
-      if (!inviteForm.email) throw new Error("Email is required");
-      const existing = invitations.find((i: any) => i.email === inviteForm.email && i.status === "pending");
-      if (existing) throw new Error("Invitation already pending for this email");
-      const { error } = await supabase.from("invitations").insert({
-        email: inviteForm.email,
-        role: inviteForm.role,
-        invited_by: user?.id,
-      });
-      if (error) throw error;
-      await logAudit("Sent invitation", `Invited ${inviteForm.email} as ${inviteForm.role}`);
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["invitations"] });
-      toast.success("Invitation created");
-      setInviteOpen(false);
-      setInviteForm({ email: "", role: "staff" });
-    },
-    onError: (e: Error) => toast.error(e.message),
-  });
 
   const saveModuleOverride = useMutation({
     mutationFn: async ({ userId, moduleKey, enabled }: { userId: string; moduleKey: string; enabled: boolean }) => {
@@ -616,32 +595,7 @@ export default function Members() {
         </div>
       </DialogContent></Dialog>
 
-      {/* Invite Dialog */}
-      <Dialog open={inviteOpen} onOpenChange={setInviteOpen}><DialogContent>
-        <DialogHeader><DialogTitle>Invite New User</DialogTitle><DialogDescription>Send an invitation to a new team member.</DialogDescription></DialogHeader>
-        <div className="space-y-4">
-          <div><Label>Email Address</Label><Input type="email" placeholder="user@company.com" value={inviteForm.email} onChange={e => setInviteForm({ ...inviteForm, email: e.target.value })} /></div>
-          <div><Label>Role</Label>
-            <Select value={inviteForm.role} onValueChange={v => setInviteForm({ ...inviteForm, role: v })}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="admin">Admin — Full system access</SelectItem>
-                <SelectItem value="manager">Manager — Manage teams & approve</SelectItem>
-                <SelectItem value="staff">Staff — Standard access</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="bg-muted/50 rounded-lg p-3 text-xs text-muted-foreground space-y-1">
-            <p className="font-medium text-foreground">Role Permissions:</p>
-            <p>• <strong>Admin</strong>: Full access to all modules including settings, audit logs, and member management</p>
-            <p>• <strong>Manager</strong>: Access to operations, approvals, payroll, and finance (no admin settings)</p>
-            <p>• <strong>Staff</strong>: Access to daily operations — tasks, timesheets, requests, and attendance</p>
-          </div>
-          <Button className="w-full h-9" onClick={() => sendInvite.mutate()} disabled={!inviteForm.email || sendInvite.isPending}>
-            {sendInvite.isPending && <Loader2 className="animate-spin mr-2 h-4 w-4" />} Send Invitation
-          </Button>
-        </div>
-      </DialogContent></Dialog>
+      <InviteDialog open={inviteOpen} onOpenChange={setInviteOpen} />
     </div>
   );
 }
