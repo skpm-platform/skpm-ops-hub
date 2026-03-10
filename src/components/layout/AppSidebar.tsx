@@ -13,6 +13,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { useSystemSetting } from "@/hooks/use-system-settings";
 import { useUserRole } from "@/hooks/use-profile";
+import { usePermissions } from "@/hooks/use-permissions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import {
@@ -136,6 +137,7 @@ export function AppSidebar() {
   const isAdmin = userRole === "admin";
   const isManagerUp = userRole === "admin" || userRole === "manager";
   const badges = useSidebarBadges(isManagerUp);
+  const { canAccess } = usePermissions();
 
   const logoSrc = companyLogoUrl || skpmLogo;
 
@@ -145,7 +147,9 @@ export function AppSidebar() {
   const filterItems = (items: NavItem[]) => items.filter(item => {
     if (item.adminOnly && !isAdmin) return false;
     if (item.managerUp && !isManagerUp) return false;
-    return true;
+    // Also check DB-driven permissions (module key is URL without leading slash)
+    const moduleKey = item.url.replace("/", "");
+    return canAccess(moduleKey);
   });
 
   const visibleGroups = navGroups.map(g => ({
