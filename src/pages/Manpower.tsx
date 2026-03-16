@@ -256,7 +256,7 @@ export default function Manpower() {
 
   const bulkUpdateStatus = async (status: string) => {
     try {
-      const ids = Array.from(selected);
+      const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").update({ status }).in("id", ids);
       if (error) throw error;
       await logAudit("Bulk status update", `${ids.length} workers → ${status}`);
