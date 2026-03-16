@@ -55,7 +55,7 @@ export default function Accommodation() {
     queryKey: ["accommodation-residents", viewing?.id],
     enabled: !!viewing && showResidents,
     queryFn: async () => {
-      const { data: byId } = await supabase.from("employees").select("id, name, position").eq("site_id" as any, viewing.id);
+      const { data: byId } = await (supabase as any).from("employees").select("id, name, position").eq("site_id", viewing.id);
       return (byId as any[]) || [];
     },
   });
