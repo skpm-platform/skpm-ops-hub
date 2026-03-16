@@ -47,7 +47,7 @@ export default function Accommodation() {
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["accommodations"],
-    queryFn: async () => { const { data } = await (supabase as any).from("accommodations").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("accommodations").select("*").order("created_at", { ascending: false }); return (data as any[]) || []; },
   });
 
   // Residents for viewing camp
@@ -55,12 +55,8 @@ export default function Accommodation() {
     queryKey: ["accommodation-residents", viewing?.id],
     enabled: !!viewing && showResidents,
     queryFn: async () => {
-      // Try by accommodation_id first, then by camp_name
-      const { data: byId } = await supabase.from("employees").select("id, name, position, employee_no").eq("accommodation_id" as any, viewing.id);
-      if (byId && byId.length > 0) return byId;
-      // Fallback: manpower table
-      const { data: byName } = await (supabase as any).from("manpower").select("id, name, trade").eq("camp_name", viewing.camp_name);
-      return byName || [];
+      const { data: byId } = await (supabase as any).from("employees").select("id, name, position").eq("site_id", viewing.id);
+      return (byId as any[]) || [];
     },
   });
 

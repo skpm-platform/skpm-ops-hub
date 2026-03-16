@@ -160,7 +160,7 @@ export default function Finance() {
   const availableYears = Array.from(new Set(transactions.map(t => t.date?.substring(0, 4)))).filter(Boolean).sort().reverse();
 
   const filtered = transactions.filter(t => {
-    const matchSearch = (t.description || "").toLowerCase().includes(search.toLowerCase()) || (t.category || "").toLowerCase().includes(search.toLowerCase()) || (t.reference || "").toLowerCase().includes(search.toLowerCase());
+    const matchSearch = (t.description || "").toLowerCase().includes(search.toLowerCase()) || (t.category || "").toLowerCase().includes(search.toLowerCase()) || ((t as any).reference || "").toLowerCase().includes(search.toLowerCase());
     const matchType = typeFilter === "all" || t.type === typeFilter;
     const matchMonth = filterMonth === "all" || (t.date && t.date.substring(5, 7) === filterMonth.padStart(2, "0"));
     const matchYear = filterYear === "all" || (t.date && t.date.substring(0, 4) === filterYear);

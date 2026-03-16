@@ -250,11 +250,13 @@ export default function Manpower() {
   const safetyExpired = workers.filter((r: any) => r.safety_card_expiry && daysUntil(r.safety_card_expiry) !== null && daysUntil(r.safety_card_expiry)! < 0).length;
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
-  const { selected, toggleOne, toggleAll, clearSelection, isAllSelected, isSomeSelected } = useBulkSelect(pageData.map((r: any) => r.id));
+  const { selectedIds: selected, toggle: toggleOne, selectAll, clearSelection, allSelected: isAllSelected, isSelected } = useBulkSelect(pageData.map((r: any) => ({ id: r.id })));
+  const isSomeSelected = selected.length > 0 && !isAllSelected;
+  const toggleAll = (checked: boolean) => selectAll(checked);
 
   const bulkUpdateStatus = async (status: string) => {
     try {
-      const ids = Array.from(selected);
+      const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").update({ status }).in("id", ids);
       if (error) throw error;
       await logAudit("Bulk status update", `${ids.length} workers → ${status}`);
@@ -268,7 +270,7 @@ export default function Manpower() {
 
   const bulkDelete = async () => {
     try {
-      const ids = Array.from(selected);
+      const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").delete().in("id", ids);
       if (error) throw error;
       await logAudit("Bulk deleted workers", `${ids.length} workers`);
@@ -394,9 +396,9 @@ export default function Manpower() {
             <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
           </div>
 
-          {selected.size > 0 && (
+          {selected.length > 0 && (
             <div className="mb-3 flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="text-sm font-medium">{selected.size} selected</span>
+              <span className="text-sm font-medium">{selected.length} selected</span>
               <Select onValueChange={bulkUpdateStatus}>
                 <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Change status..." /></SelectTrigger>
                 <SelectContent>
@@ -423,7 +425,7 @@ export default function Manpower() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">
-                        <Checkbox checked={isAllSelected} onCheckedChange={v => v ? toggleAll() : clearSelection()} />
+                        <Checkbox checked={isAllSelected} onCheckedChange={v => v ? toggleAll(true) : clearSelection()} />
                       </TableHead>
                       <SortableHeader label="ID" sortKey="worker_id" direction={getSortDirection("worker_id")} onToggle={toggleSort} />
                       <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
@@ -439,9 +441,9 @@ export default function Manpower() {
                   </TableHeader>
                   <TableBody>
                     {pageData.map((r: any) => (
-                      <TableRow key={r.id} className={selected.has(r.id) ? "bg-primary/5" : ""}>
+                      <TableRow key={r.id} className={isSelected(r.id) ? "bg-primary/5" : ""}>
                         <TableCell>
-                          <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleOne(r.id)} />
+                          <Checkbox checked={isSelected(r.id)} onCheckedChange={() => toggleOne(r.id)} />
                         </TableCell>
                         <TableCell className="text-xs font-mono">{r.worker_id}</TableCell>
                         <TableCell className="font-medium">{r.name}</TableCell>
@@ -640,7 +642,7 @@ export default function Manpower() {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Worker?" onConfirm={() => deleteId && remove.mutate(deleteId)} />
-      <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} title={`Delete ${selected.size} workers?`} onConfirm={bulkDelete} />
+      <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} title={`Delete ${selected.length} workers?`} onConfirm={bulkDelete} />
     </div>
   );
 }

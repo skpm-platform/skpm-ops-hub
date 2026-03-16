@@ -278,7 +278,7 @@ export default function Tasks() {
                       const dueDateInfo = getDueDateInfo(task.due_date);
                       const pConfig = priorityConfig[task.priority ?? "medium"];
                       const hoursProgress = task.estimated_hours && task.actual_hours ? Math.min(100, Math.round((task.actual_hours / task.estimated_hours) * 100)) : null;
-                      const taskProgress = task.progress != null ? Number(task.progress) : null;
+                      const taskProgress = (task as any).progress != null ? Number((task as any).progress) : null;
                       const assigneeName = employees.find((e: any) => e.id === task.assigned_to)?.name;
                       return (
                         <div

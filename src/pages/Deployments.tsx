@@ -408,7 +408,7 @@ export default function Deployments() {
               <Select
                 value={form.worker_id}
                 onValueChange={(v) => {
-                  const worker = workers.find((w: any) => w.id === v);
+                  const worker = workers.find((w: any) => w.id === v) as any;
                   setForm(f => ({
                     ...f,
                     worker_id: v,
