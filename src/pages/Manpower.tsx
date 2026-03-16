@@ -642,7 +642,7 @@ export default function Manpower() {
       </Dialog>
 
       <ConfirmDialog open={!!deleteId} onOpenChange={() => setDeleteId(null)} title="Delete Worker?" onConfirm={() => deleteId && remove.mutate(deleteId)} />
-      <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} title={`Delete ${selected.size} workers?`} onConfirm={bulkDelete} />
+      <ConfirmDialog open={bulkDeleteOpen} onOpenChange={setBulkDeleteOpen} title={`Delete ${selected.length} workers?`} onConfirm={bulkDelete} />
     </div>
   );
 }
