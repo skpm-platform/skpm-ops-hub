@@ -425,7 +425,7 @@ export default function Manpower() {
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10">
-                        <Checkbox checked={isAllSelected} onCheckedChange={v => v ? toggleAll() : clearSelection()} />
+                        <Checkbox checked={isAllSelected} onCheckedChange={v => v ? toggleAll(true) : clearSelection()} />
                       </TableHead>
                       <SortableHeader label="ID" sortKey="worker_id" direction={getSortDirection("worker_id")} onToggle={toggleSort} />
                       <SortableHeader label="Name" sortKey="name" direction={getSortDirection("name")} onToggle={toggleSort} />
