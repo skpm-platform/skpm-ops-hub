@@ -250,7 +250,9 @@ export default function Manpower() {
   const safetyExpired = workers.filter((r: any) => r.safety_card_expiry && daysUntil(r.safety_card_expiry) !== null && daysUntil(r.safety_card_expiry)! < 0).length;
 
   const { pageData, page, totalPages, totalItems, setPage, toggleSort, getSortDirection, pageSize } = useDataTable(filtered);
-  const { selected, toggleOne, toggleAll, clearSelection, isAllSelected, isSomeSelected } = useBulkSelect(pageData.map((r: any) => r.id));
+  const { selectedIds: selected, toggle: toggleOne, selectAll, clearSelection, allSelected: isAllSelected, isSelected } = useBulkSelect(pageData.map((r: any) => ({ id: r.id })));
+  const isSomeSelected = selected.length > 0 && !isAllSelected;
+  const toggleAll = (checked: boolean) => selectAll(checked);
 
   const bulkUpdateStatus = async (status: string) => {
     try {
