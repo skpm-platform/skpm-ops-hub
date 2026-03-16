@@ -1405,6 +1405,30 @@ export type Database = {
           },
         ]
       }
+      role_permissions: {
+        Row: {
+          enabled: boolean
+          id: string
+          module_key: string
+          role: string
+          updated_at: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: string
+          module_key: string
+          role: string
+          updated_at?: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          module_key?: string
+          role?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       sites: {
         Row: {
           client_id: string | null
@@ -1707,6 +1731,30 @@ export type Database = {
           },
         ]
       }
+      user_module_permissions: {
+        Row: {
+          enabled: boolean
+          id: string
+          module_key: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          enabled?: boolean
+          id?: string
+          module_key: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          enabled?: boolean
+          id?: string
+          module_key?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           id: string
@@ -1903,6 +1951,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      accept_invitation: {
+        Args: { p_token: string; p_user_id: string }
+        Returns: undefined
+      }
       admin_update_user_role: {
         Args: {
           _new_role: Database["public"]["Enums"]["app_role"]
