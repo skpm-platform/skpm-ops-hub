@@ -441,9 +441,9 @@ export default function Manpower() {
                   </TableHeader>
                   <TableBody>
                     {pageData.map((r: any) => (
-                      <TableRow key={r.id} className={selected.has(r.id) ? "bg-primary/5" : ""}>
+                      <TableRow key={r.id} className={isSelected(r.id) ? "bg-primary/5" : ""}>
                         <TableCell>
-                          <Checkbox checked={selected.has(r.id)} onCheckedChange={() => toggleOne(r.id)} />
+                          <Checkbox checked={isSelected(r.id)} onCheckedChange={() => toggleOne(r.id)} />
                         </TableCell>
                         <TableCell className="text-xs font-mono">{r.worker_id}</TableCell>
                         <TableCell className="font-medium">{r.name}</TableCell>
