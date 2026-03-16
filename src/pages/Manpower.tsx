@@ -396,9 +396,9 @@ export default function Manpower() {
             <StatusFilter statuses={statuses} selected={statusFilter} onSelect={setStatusFilter} />
           </div>
 
-          {selected.size > 0 && (
+          {selected.length > 0 && (
             <div className="mb-3 flex items-center gap-2 p-2 rounded-md bg-primary/5 border border-primary/20">
-              <span className="text-sm font-medium">{selected.size} selected</span>
+              <span className="text-sm font-medium">{selected.length} selected</span>
               <Select onValueChange={bulkUpdateStatus}>
                 <SelectTrigger className="h-8 w-40 text-xs"><SelectValue placeholder="Change status..." /></SelectTrigger>
                 <SelectContent>
