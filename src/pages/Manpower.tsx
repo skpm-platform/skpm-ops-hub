@@ -270,7 +270,7 @@ export default function Manpower() {
 
   const bulkDelete = async () => {
     try {
-      const ids = Array.from(selected);
+      const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").delete().in("id", ids);
       if (error) throw error;
       await logAudit("Bulk deleted workers", `${ids.length} workers`);

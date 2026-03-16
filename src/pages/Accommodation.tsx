@@ -47,7 +47,7 @@ export default function Accommodation() {
 
   const { data = [], isLoading } = useQuery({
     queryKey: ["accommodations"],
-    queryFn: async () => { const { data } = await (supabase as any).from("accommodations").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("accommodations").select("*").order("created_at", { ascending: false }); return (data as any[]) || []; },
   });
 
   // Residents for viewing camp

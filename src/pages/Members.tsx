@@ -120,7 +120,7 @@ export default function Members() {
       // Update role
       const { error: roleError } = await supabase
         .from("user_roles")
-        .upsert({ user_id: editingUserId, role: form.role }, { onConflict: "user_id" });
+        .upsert({ user_id: editingUserId, role: form.role as any } as any, { onConflict: "user_id" });
       if (roleError) throw roleError;
       await logAudit("Updated member", `Updated ${form.name}: role=${form.role}, status=${form.status}`);
     },
