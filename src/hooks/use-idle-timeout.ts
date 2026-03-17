@@ -8,8 +8,8 @@ const ACTIVITY_THROTTLE_MS = 5000;
 
 export function useIdleTimeout() {
   const { user } = useAuth();
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warningRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const timerRef = useRef<number | null>(null);
+  const warningRef = useRef<number | null>(null);
 
   const clearTimers = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
