@@ -22,19 +22,18 @@ const AuthContext = createContext<AuthContextType>({
 
 export const useAuth = () => useContext(AuthContext);
 
-const SESSION_REFRESH_INTERVAL = 10 * 60 * 1000; // 10 minutes
-
 async function fetchUserRole(userId: string): Promise<Role> {
-  try {
-    const { data } = await supabase
-      .from("user_roles")
-      .select("role")
-      .eq("user_id", userId)
-      .single();
-    return (data?.role as Role) ?? "staff";
-  } catch {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select("role")
+    .eq("user_id", userId)
+    .maybeSingle();
+
+  if (error) {
     return "staff";
   }
+
+  return (data?.role as Role) ?? "staff";
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -44,56 +43,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener BEFORE getSession (per Supabase best practice)
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      setSession(session);
-      setUser(session?.user ?? null);
+    let mounted = true;
 
-      if (session?.user) {
-        // Fetch role asynchronously without blocking auth state update
-        fetchUserRole(session.user.id).then(setRole);
-      } else {
+    const syncRole = async (nextUser: User | null) => {
+      if (!mounted) return;
+
+      if (!nextUser) {
         setRole(null);
+        return;
       }
 
-      setLoading(false);
-
-      // Handle token refresh errors - sign out on invalid session
-      if (event === "TOKEN_REFRESHED" && !session) {
-        supabase.auth.signOut();
+      const nextRole = await fetchUserRole(nextUser.id);
+      if (mounted) {
+        setRole(nextRole);
       }
+    };
 
-      // Handle sign out events
-      if (event === "SIGNED_OUT") {
-        setSession(null);
-        setUser(null);
-        setRole(null);
-      }
-    });
-
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-
-      if (session?.user) {
-        const userRole = await fetchUserRole(session.user.id);
-        setRole(userRole);
-      }
-
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setUser(nextSession?.user ?? null);
+      void syncRole(nextSession?.user ?? null);
       setLoading(false);
     });
 
-    // Periodic session refresh to keep tokens fresh
-    const refreshInterval = setInterval(async () => {
-      const { data: { session: currentSession } } = await supabase.auth.getSession();
-      if (currentSession) {
-        await supabase.auth.refreshSession();
+    void supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
+      if (!mounted) return;
+
+      setSession(initialSession);
+      setUser(initialSession?.user ?? null);
+      await syncRole(initialSession?.user ?? null);
+
+      if (mounted) {
+        setLoading(false);
       }
-    }, SESSION_REFRESH_INTERVAL);
+    });
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
-      clearInterval(refreshInterval);
     };
   }, []);
 

@@ -1,12 +1,15 @@
 import { useEffect, useRef, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
 
 const IDLE_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
 const WARNING_BEFORE_MS = 2 * 60 * 1000; // warn 2 minutes before
+const ACTIVITY_THROTTLE_MS = 5000;
 
 export function useIdleTimeout() {
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const warningRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { user } = useAuth();
+  const timerRef = useRef<number | null>(null);
+  const warningRef = useRef<number | null>(null);
 
   const clearTimers = useCallback(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -14,37 +17,44 @@ export function useIdleTimeout() {
   }, []);
 
   const resetTimer = useCallback(() => {
+    if (!user) return;
+
     clearTimers();
-    
-    // Warning timer
-    warningRef.current = setTimeout(() => {
-      // Could dispatch a custom event for UI warning
+
+    warningRef.current = window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent("idle-warning"));
     }, IDLE_TIMEOUT_MS - WARNING_BEFORE_MS);
 
-    // Logout timer
-    timerRef.current = setTimeout(async () => {
+    timerRef.current = window.setTimeout(async () => {
       await supabase.auth.signOut();
-      window.location.href = "/login";
+      window.location.replace("/login");
     }, IDLE_TIMEOUT_MS);
-  }, [clearTimers]);
+  }, [clearTimers, user]);
 
   useEffect(() => {
-    const events = ["mousedown", "mousemove", "keydown", "scroll", "touchstart"];
-    const throttledReset = throttle(resetTimer, 5000); // Throttle to avoid excessive calls
-    
-    events.forEach(e => document.addEventListener(e, throttledReset, { passive: true }));
+    if (!user) {
+      clearTimers();
+      return;
+    }
+
+    const events: Array<keyof WindowEventMap> = ["mousedown", "keydown", "touchstart", "wheel", "focus"];
+    const throttledReset = throttle(resetTimer, ACTIVITY_THROTTLE_MS);
+
+    events.forEach((eventName) => window.addEventListener(eventName, throttledReset, { passive: true }));
+    document.addEventListener("visibilitychange", throttledReset);
     resetTimer();
 
     return () => {
-      events.forEach(e => document.removeEventListener(e, throttledReset));
+      events.forEach((eventName) => window.removeEventListener(eventName, throttledReset));
+      document.removeEventListener("visibilitychange", throttledReset);
       clearTimers();
     };
-  }, [resetTimer, clearTimers]);
+  }, [user, resetTimer, clearTimers]);
 }
 
 function throttle(fn: () => void, ms: number) {
   let lastCall = 0;
+
   return () => {
     const now = Date.now();
     if (now - lastCall >= ms) {
