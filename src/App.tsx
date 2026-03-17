@@ -96,6 +96,21 @@ function PublicRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function LegacyPathRedirect() {
+  const location = useLocation();
+
+  return (
+    <Navigate
+      to={{
+        pathname: "/",
+        search: location.search,
+        hash: location.hash,
+      }}
+      replace
+    />
+  );
+}
+
 const App = () => (
   <ThemeProvider attribute="class" defaultTheme="light" enableSystem={false}>
     <QueryClientProvider client={queryClient}>
