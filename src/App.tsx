@@ -124,6 +124,8 @@ const App = () => (
               <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/accept-invite" element={<AcceptInvite />} />
+              <Route path="/index" element={<LegacyPathRedirect />} />
+              <Route path="/index.html" element={<LegacyPathRedirect />} />
               <Route path="/" element={<ProtectedRoute><AppLayout /></ProtectedRoute>}>
                 <Route index element={<Dashboard />} />
                 <Route path="my-profile" element={<MyProfile />} />
