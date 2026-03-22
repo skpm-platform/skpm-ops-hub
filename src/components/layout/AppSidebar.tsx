@@ -166,23 +166,24 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
+      {/* Premium Sidebar Header */}
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-3">
-          <div className="h-9 w-9 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center p-1.5 shrink-0 ring-1 ring-white/5">
-            <img src={logoSrc} alt="SKPM" className="h-full w-full rounded-md object-contain" />
+          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-sm flex items-center justify-center p-1.5 shrink-0 ring-1 ring-white/10 shadow-lg shadow-black/20">
+            <img src={logoSrc} alt="SKPM" className="h-full w-full rounded-lg object-contain" />
           </div>
           {!collapsed && (
             <div className="flex flex-col leading-none">
-              <span className="text-[13px] font-bold tracking-tight text-white">SKPM</span>
-              <span className="text-[10px] text-sidebar-foreground/70 mt-0.5">Technical Services LLC</span>
+              <span className="text-sm font-bold tracking-tight text-white">SKPM</span>
+              <span className="text-[10px] text-sidebar-foreground/50 mt-1 font-medium">Technical Services LLC</span>
             </div>
           )}
         </div>
       </SidebarHeader>
 
-      <Separator className="bg-sidebar-border/60 mx-3 w-auto" />
+      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-sidebar-border/60 to-transparent" />
 
-      <SidebarContent className="px-2 py-2 scrollbar-thin">
+      <SidebarContent className="px-2.5 py-3 scrollbar-thin">
         {visibleGroups.map((group) => {
           const active = groupHasActive(group.items);
 
@@ -199,12 +200,12 @@ export function AppSidebar() {
                             <NavLink
                               to={item.url}
                               end={item.url === "/"}
-                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-lg relative"
+                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-xl relative"
                               activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium shadow-sm"
                             >
                               <item.icon className="h-4 w-4" />
                               {count > 0 && (
-                                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1 shadow-sm">
+                                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1 shadow-sm animate-pulse-soft">
                                   {count > 99 ? "99+" : count}
                                 </span>
                               )}
@@ -222,11 +223,11 @@ export function AppSidebar() {
           return (
             <Collapsible key={group.label} defaultOpen={active || group.label === "Overview"}>
               <SidebarGroup className="py-0.5">
-                <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 group">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60 transition-colors">
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 group">
+                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/35 group-hover:text-sidebar-foreground/55 transition-colors">
                     {group.label}
                   </span>
-                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/30 transition-transform duration-200 group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/25 transition-transform duration-300 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarGroupContent>
@@ -240,13 +241,13 @@ export function AppSidebar() {
                               <NavLink
                                 to={item.url}
                                 end={item.url === "/"}
-                                className="text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-lg px-2.5 py-2"
-                                activeClassName="bg-gradient-to-r from-sidebar-primary/20 to-sidebar-primary/10 text-sidebar-primary font-semibold border-l-[3px] border-sidebar-primary shadow-sm"
+                                className="text-[13px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-white transition-all duration-200 rounded-xl px-3 py-2.5 group/item"
+                                activeClassName="bg-gradient-to-r from-sidebar-primary/20 via-sidebar-primary/12 to-transparent text-white font-semibold border-l-[3px] border-sidebar-primary shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]"
                               >
-                                <item.icon className={`mr-2.5 h-[15px] w-[15px] shrink-0 ${itemActive ? "text-sidebar-primary" : ""}`} />
+                                <item.icon className={`mr-3 h-[16px] w-[16px] shrink-0 transition-colors duration-200 ${itemActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover/item:text-sidebar-foreground/80"}`} />
                                 <span className="flex-1 truncate">{item.title}</span>
                                 {count > 0 && (
-                                  <span className="ml-auto h-5 min-w-[22px] rounded-full bg-destructive/20 text-destructive text-[10px] font-bold flex items-center justify-center px-1.5 tabular-nums">
+                                  <span className={`ml-auto h-5 min-w-[22px] rounded-full text-[10px] font-bold flex items-center justify-center px-1.5 tabular-nums shadow-sm ${count > 5 ? "bg-destructive/25 text-destructive" : "bg-warning/20 text-warning"}`}>
                                     {count > 99 ? "99+" : count}
                                   </span>
                                 )}
@@ -264,13 +265,13 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
-      <Separator className="bg-sidebar-border/60 mx-3 w-auto" />
+      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-sidebar-border/60 to-transparent" />
 
       <SidebarFooter className="p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut} className="text-[13px] text-sidebar-foreground hover:bg-destructive/15 hover:text-destructive transition-all duration-200 rounded-lg py-2">
-              <LogOut className="mr-2.5 h-[15px] w-[15px]" />
+            <SidebarMenuButton onClick={signOut} className="text-[13px] text-sidebar-foreground/60 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 rounded-xl py-2.5">
+              <LogOut className="mr-3 h-[16px] w-[16px]" />
               {!collapsed && <span>Sign Out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>
