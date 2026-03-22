@@ -120,7 +120,7 @@ function useSidebarBadges(isManagerUp: boolean) {
         pendingApprovals,
       };
     },
-    refetchInterval: 60000, // refresh every minute
+    refetchInterval: 60000,
     enabled: isManagerUp,
   });
   return badges ?? {};
@@ -147,7 +147,6 @@ export function AppSidebar() {
   const filterItems = (items: NavItem[]) => items.filter(item => {
     if (item.adminOnly && !isAdmin) return false;
     if (item.managerUp && !isManagerUp) return false;
-    // Also check DB-driven permissions (module key is URL without leading slash)
     const moduleKey = item.url.replace("/", "");
     return canAccess(moduleKey);
   });
@@ -169,19 +168,21 @@ export function AppSidebar() {
     <Sidebar collapsible="icon" className="border-r-0">
       <SidebarHeader className="px-4 py-5">
         <div className="flex items-center gap-3">
-          <img src={logoSrc} alt="SKPM" className="h-8 w-8 shrink-0 rounded-md object-contain" />
+          <div className="h-9 w-9 rounded-xl bg-white/10 backdrop-blur-sm flex items-center justify-center p-1.5 shrink-0 ring-1 ring-white/5">
+            <img src={logoSrc} alt="SKPM" className="h-full w-full rounded-md object-contain" />
+          </div>
           {!collapsed && (
             <div className="flex flex-col leading-none">
-              <span className="text-[13px] font-semibold tracking-tight text-sidebar-accent-foreground">SKPM</span>
-              <span className="text-[10px] text-sidebar-foreground mt-0.5">Technical Services LLC</span>
+              <span className="text-[13px] font-bold tracking-tight text-white">SKPM</span>
+              <span className="text-[10px] text-sidebar-foreground/70 mt-0.5">Technical Services LLC</span>
             </div>
           )}
         </div>
       </SidebarHeader>
 
-      <Separator className="bg-sidebar-border mx-3 w-auto" />
+      <Separator className="bg-sidebar-border/60 mx-3 w-auto" />
 
-      <SidebarContent className="px-2 py-2">
+      <SidebarContent className="px-2 py-2 scrollbar-thin">
         {visibleGroups.map((group) => {
           const active = groupHasActive(group.items);
 
@@ -198,12 +199,12 @@ export function AppSidebar() {
                             <NavLink
                               to={item.url}
                               end={item.url === "/"}
-                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded relative"
-                              activeClassName="bg-sidebar-accent text-sidebar-primary font-medium"
+                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-lg relative"
+                              activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium shadow-sm"
                             >
                               <item.icon className="h-4 w-4" />
                               {count > 0 && (
-                                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1">
+                                <span className="absolute -top-1 -right-1 h-4 min-w-[16px] rounded-full bg-destructive text-destructive-foreground text-[9px] font-bold flex items-center justify-center px-1 shadow-sm">
                                   {count > 99 ? "99+" : count}
                                 </span>
                               )}
@@ -222,29 +223,30 @@ export function AppSidebar() {
             <Collapsible key={group.label} defaultOpen={active || group.label === "Overview"}>
               <SidebarGroup className="py-0.5">
                 <CollapsibleTrigger className="flex w-full items-center justify-between px-2 py-1.5 group">
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/50 group-hover:text-sidebar-foreground/70 transition-colors">
+                  <span className="text-[10px] font-semibold uppercase tracking-widest text-sidebar-foreground/40 group-hover:text-sidebar-foreground/60 transition-colors">
                     {group.label}
                   </span>
-                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/40 transition-transform group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/30 transition-transform duration-200 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarGroupContent>
                     <SidebarMenu>
                       {group.items.map((item) => {
                         const count = getBadgeCount(item.badgeKey);
+                        const itemActive = isActive(item.url);
                         return (
                           <SidebarMenuItem key={item.title}>
                             <SidebarMenuButton asChild>
                               <NavLink
                                 to={item.url}
                                 end={item.url === "/"}
-                                className="text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-colors rounded px-2 py-1.5"
-                                activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium border-l-2 border-sidebar-primary"
+                                className="text-[13px] text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-lg px-2.5 py-2"
+                                activeClassName="bg-gradient-to-r from-sidebar-primary/20 to-sidebar-primary/10 text-sidebar-primary font-semibold border-l-[3px] border-sidebar-primary shadow-sm"
                               >
-                                <item.icon className="mr-2.5 h-3.5 w-3.5 shrink-0" />
-                                <span className="flex-1">{item.title}</span>
+                                <item.icon className={`mr-2.5 h-[15px] w-[15px] shrink-0 ${itemActive ? "text-sidebar-primary" : ""}`} />
+                                <span className="flex-1 truncate">{item.title}</span>
                                 {count > 0 && (
-                                  <span className="ml-auto h-5 min-w-[20px] rounded-full bg-destructive/15 text-destructive text-[10px] font-semibold flex items-center justify-center px-1.5">
+                                  <span className="ml-auto h-5 min-w-[22px] rounded-full bg-destructive/20 text-destructive text-[10px] font-bold flex items-center justify-center px-1.5 tabular-nums">
                                     {count > 99 ? "99+" : count}
                                   </span>
                                 )}
@@ -262,13 +264,13 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
-      <Separator className="bg-sidebar-border mx-3 w-auto" />
+      <Separator className="bg-sidebar-border/60 mx-3 w-auto" />
 
       <SidebarFooter className="p-3">
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut} className="text-[13px] text-sidebar-foreground hover:bg-destructive/15 hover:text-destructive transition-colors rounded">
-              <LogOut className="mr-2.5 h-3.5 w-3.5" />
+            <SidebarMenuButton onClick={signOut} className="text-[13px] text-sidebar-foreground hover:bg-destructive/15 hover:text-destructive transition-all duration-200 rounded-lg py-2">
+              <LogOut className="mr-2.5 h-[15px] w-[15px]" />
               {!collapsed && <span>Sign Out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>

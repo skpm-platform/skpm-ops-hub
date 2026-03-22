@@ -129,7 +129,6 @@ export default function Dashboard() {
     },
   });
 
-  // Today helpdesk open tickets
   const { data: helpdeskTickets } = useQuery({
     queryKey: ["dashboard-helpdesk-open"],
     queryFn: async () => {
@@ -138,7 +137,6 @@ export default function Dashboard() {
     },
   });
 
-  // Expiry alerts: visa expiring in 30 days
   const { data: visaExpiring } = useQuery({
     queryKey: ["dashboard-visa-expiring"],
     queryFn: async () => {
@@ -149,7 +147,6 @@ export default function Dashboard() {
     },
   });
 
-  // Contracts expiring in 30 days
   const { data: contractsExpiring } = useQuery({
     queryKey: ["dashboard-contracts-expiring"],
     queryFn: async () => {
@@ -160,7 +157,6 @@ export default function Dashboard() {
     },
   });
 
-  // Assets maintenance due in 30 days
   const { data: assetsMaintDue } = useQuery({
     queryKey: ["dashboard-assets-maint"],
     queryFn: async () => {
@@ -228,13 +224,13 @@ export default function Dashboard() {
   ].filter(d => d.value > 0);
 
   const quickActions = [
-    { label: "Add Employee", icon: UserPlus, path: "/employees", color: "bg-primary/10 text-primary hover:bg-primary/20" },
-    { label: "Create Invoice", icon: FileText, path: "/invoices", color: "bg-success/10 text-success hover:bg-success/20", show: isManagerUp },
-    { label: "New Task", icon: CheckSquare, path: "/tasks", color: "bg-info/10 text-info hover:bg-info/20" },
-    { label: "Log Expense", icon: Receipt, path: "/expenses", color: "bg-warning/10 text-warning hover:bg-warning/20" },
-    { label: "New Project", icon: FolderKanban, path: "/projects", color: "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20", show: isManagerUp },
-    { label: "Work Order", icon: Wrench, path: "/work-orders", color: "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20" },
-    { label: "Leave Request", icon: UserMinus, path: "/leave", color: "bg-destructive/10 text-destructive hover:bg-destructive/20" },
+    { label: "Add Employee", icon: UserPlus, path: "/employees", color: "bg-primary/10 text-primary hover:bg-primary/20 border-primary/10" },
+    { label: "Create Invoice", icon: FileText, path: "/invoices", color: "bg-success/10 text-success hover:bg-success/20 border-success/10", show: isManagerUp },
+    { label: "New Task", icon: CheckSquare, path: "/tasks", color: "bg-info/10 text-info hover:bg-info/20 border-info/10" },
+    { label: "Log Expense", icon: Receipt, path: "/expenses", color: "bg-warning/10 text-warning hover:bg-warning/20 border-warning/10" },
+    { label: "New Project", icon: FolderKanban, path: "/projects", color: "bg-purple-500/10 text-purple-600 hover:bg-purple-500/20 border-purple-500/10", show: isManagerUp },
+    { label: "Work Order", icon: Wrench, path: "/work-orders", color: "bg-orange-500/10 text-orange-600 hover:bg-orange-500/20 border-orange-500/10" },
+    { label: "Leave Request", icon: UserMinus, path: "/leave", color: "bg-destructive/10 text-destructive hover:bg-destructive/20 border-destructive/10" },
   ].filter(a => a.show !== false);
 
   const handleFullExport = async () => {
@@ -253,18 +249,18 @@ export default function Dashboard() {
   const expiryAlertCount = (visaExpiring?.length ?? 0) + (contractsExpiring?.length ?? 0) + (assetsMaintDue?.length ?? 0);
 
   return (
-    <div className="space-y-6 animate-fade-in">
+    <div className="space-y-5 sm:space-y-6 animate-fade-in max-w-[1600px] mx-auto">
       {/* Welcome Header */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
         <div className="space-y-1">
-          <h1 className="text-2xl font-bold text-foreground tracking-tight">{greeting}, {firstName} 👋</h1>
-          <p className="text-sm text-muted-foreground">{format(new Date(), "EEEE, MMMM d, yyyy")} • Here's what's happening today</p>
+          <h1 className="text-xl sm:text-2xl font-bold text-foreground tracking-tight">{greeting}, {firstName} 👋</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">{format(new Date(), "EEEE, MMMM d, yyyy")} • Here's what's happening today</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <div className="flex items-center gap-1.5">
             <CalendarRange className="h-3.5 w-3.5 text-muted-foreground" />
             <Select value={dateRange} onValueChange={setDateRange}>
-              <SelectTrigger className="h-9 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+              <SelectTrigger className="h-8 sm:h-9 w-[120px] sm:w-[130px] text-xs rounded-lg"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="1m">Last Month</SelectItem>
                 <SelectItem value="3m">Last 3 Months</SelectItem>
@@ -274,23 +270,23 @@ export default function Dashboard() {
             </Select>
           </div>
           {isAdmin && (
-            <Button variant="outline" size="sm" className="h-9 gap-2 text-xs" onClick={handleFullExport}>
-              <Download className="h-3.5 w-3.5" /> Export All
+            <Button variant="outline" size="sm" className="h-8 sm:h-9 gap-2 text-xs rounded-lg" onClick={handleFullExport}>
+              <Download className="h-3.5 w-3.5" /> <span className="hidden sm:inline">Export All</span>
             </Button>
           )}
-          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 text-xs font-normal px-2.5 py-1">
+          <Badge variant="outline" className="hidden sm:flex items-center gap-1.5 text-xs font-normal px-2.5 py-1 rounded-lg">
             <Activity className="h-3 w-3 text-success animate-pulse" />System Online
           </Badge>
         </div>
       </div>
 
-      {/* Quick Actions */}
+      {/* Quick Actions - horizontal scroll on mobile */}
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Quick Actions</p>
-        <div className="flex flex-wrap gap-2">
+        <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Quick Actions</p>
+        <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 scrollbar-thin">
           {quickActions.map((action) => (
             <Button key={action.label} variant="ghost" size="sm"
-              className={`h-9 gap-2 text-xs font-medium rounded-lg border border-transparent transition-all ${action.color}`}
+              className={`h-8 sm:h-9 gap-1.5 sm:gap-2 text-[11px] sm:text-xs font-medium rounded-lg border transition-all duration-200 shrink-0 ${action.color}`}
               onClick={() => navigate(action.path)}>
               <action.icon className="h-3.5 w-3.5" />{action.label}
             </Button>
@@ -298,28 +294,41 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Today's Stats */}
+      {/* Today's Stats - responsive grid */}
       <div className="space-y-2">
-        <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Today</p>
-        <div className="grid gap-3 grid-cols-3">
-          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/attendance")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-success/10 flex items-center justify-center"><Users className="h-4 w-4 text-success" /></div>
-              <div><p className="text-lg font-bold">{presentToday}</p><p className="text-xs text-muted-foreground">Check-ins</p></div>
-            </CardContent>
-          </Card>
-          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/helpdesk")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className="h-9 w-9 rounded-lg bg-warning/10 flex items-center justify-center"><Ticket className="h-4 w-4 text-warning" /></div>
-              <div><p className="text-lg font-bold">{openTickets}</p><p className="text-xs text-muted-foreground">Open Tickets</p></div>
-            </CardContent>
-          </Card>
-          <Card className="border shadow-sm cursor-pointer hover:shadow-md transition-shadow" onClick={() => navigate("/approvals")}>
-            <CardContent className="p-4 flex items-center gap-3">
-              <div className={`h-9 w-9 rounded-lg flex items-center justify-center ${totalPendingApprovals > 0 ? "bg-destructive/10" : "bg-muted"}`}>
-                <Clock className={`h-4 w-4 ${totalPendingApprovals > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+        <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Today</p>
+        <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-3">
+          <Card className="card-hover border shadow-sm cursor-pointer" onClick={() => navigate("/attendance")}>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-success/20 to-success/5 flex items-center justify-center shrink-0">
+                <Users className="h-4.5 w-4.5 text-success" />
               </div>
-              <div><p className="text-lg font-bold">{totalPendingApprovals}</p><p className="text-xs text-muted-foreground">Pending Approvals</p></div>
+              <div className="min-w-0">
+                <p className="text-lg sm:text-xl font-bold tabular-nums">{presentToday}</p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground">Check-ins Today</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-hover border shadow-sm cursor-pointer" onClick={() => navigate("/helpdesk")}>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+              <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-warning/20 to-warning/5 flex items-center justify-center shrink-0">
+                <Ticket className="h-4.5 w-4.5 text-warning" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg sm:text-xl font-bold tabular-nums">{openTickets}</p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground">Open Tickets</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="card-hover border shadow-sm cursor-pointer" onClick={() => navigate("/approvals")}>
+            <CardContent className="p-3 sm:p-4 flex items-center gap-3">
+              <div className={`h-10 w-10 rounded-xl flex items-center justify-center shrink-0 ${totalPendingApprovals > 0 ? "bg-gradient-to-br from-destructive/20 to-destructive/5" : "bg-muted"}`}>
+                <Clock className={`h-4.5 w-4.5 ${totalPendingApprovals > 0 ? "text-destructive" : "text-muted-foreground"}`} />
+              </div>
+              <div className="min-w-0">
+                <p className="text-lg sm:text-xl font-bold tabular-nums">{totalPendingApprovals}</p>
+                <p className="text-[11px] sm:text-xs text-muted-foreground">Pending Approvals</p>
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -328,29 +337,29 @@ export default function Dashboard() {
       {/* Expiry Alerts Section */}
       {expiryAlertCount > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Expiry Alerts (30 days)</p>
-          <div className="grid gap-3 grid-cols-1 sm:grid-cols-3">
+          <p className="text-[10px] sm:text-xs font-semibold uppercase tracking-wider text-muted-foreground">Expiry Alerts (30 days)</p>
+          <div className="grid gap-2 sm:gap-3 grid-cols-1 sm:grid-cols-3">
             {(visaExpiring?.length ?? 0) > 0 && (
-              <Card className="border-destructive/30 bg-destructive/5 cursor-pointer hover:shadow-md" onClick={() => navigate("/manpower")}>
-                <CardContent className="p-4 flex items-center gap-3">
+              <Card className="card-hover border-destructive/30 bg-destructive/5 cursor-pointer" onClick={() => navigate("/manpower")}>
+                <CardContent className="p-3 sm:p-4 flex items-center gap-3">
                   <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
-                  <div><p className="text-sm font-semibold text-destructive">{visaExpiring?.length} Visa Expiries</p><p className="text-xs text-muted-foreground">Within 30 days</p></div>
+                  <div><p className="text-sm font-semibold text-destructive">{visaExpiring?.length} Visa Expiries</p><p className="text-[11px] text-muted-foreground">Within 30 days</p></div>
                 </CardContent>
               </Card>
             )}
             {(contractsExpiring?.length ?? 0) > 0 && (
-              <Card className="border-warning/30 bg-warning/5 cursor-pointer hover:shadow-md" onClick={() => navigate("/contracts")}>
-                <CardContent className="p-4 flex items-center gap-3">
+              <Card className="card-hover border-warning/30 bg-warning/5 cursor-pointer" onClick={() => navigate("/contracts")}>
+                <CardContent className="p-3 sm:p-4 flex items-center gap-3">
                   <AlertTriangle className="h-5 w-5 text-warning shrink-0" />
-                  <div><p className="text-sm font-semibold text-warning">{contractsExpiring?.length} Contracts</p><p className="text-xs text-muted-foreground">Expiring soon</p></div>
+                  <div><p className="text-sm font-semibold text-warning">{contractsExpiring?.length} Contracts</p><p className="text-[11px] text-muted-foreground">Expiring soon</p></div>
                 </CardContent>
               </Card>
             )}
             {(assetsMaintDue?.length ?? 0) > 0 && (
-              <Card className="border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 cursor-pointer hover:shadow-md" onClick={() => navigate("/assets")}>
-                <CardContent className="p-4 flex items-center gap-3">
+              <Card className="card-hover border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 cursor-pointer" onClick={() => navigate("/assets")}>
+                <CardContent className="p-3 sm:p-4 flex items-center gap-3">
                   <Wrench className="h-5 w-5 text-amber-600 shrink-0" />
-                  <div><p className="text-sm font-semibold text-amber-700 dark:text-amber-400">{assetsMaintDue?.length} Assets</p><p className="text-xs text-muted-foreground">Maintenance due</p></div>
+                  <div><p className="text-sm font-semibold text-amber-700 dark:text-amber-400">{assetsMaintDue?.length} Assets</p><p className="text-[11px] text-muted-foreground">Maintenance due</p></div>
                 </CardContent>
               </Card>
             )}
@@ -360,47 +369,47 @@ export default function Dashboard() {
 
       {/* Pending Approvals Banner */}
       {isManagerUp && (pendingLeaves > 0 || pendingExpenses > 0 || openWO > 0) && (
-        <Card className="border-warning/30 bg-gradient-to-r from-warning/5 to-transparent">
+        <Card className="border-warning/30 bg-gradient-to-r from-warning/5 via-warning/3 to-transparent overflow-hidden">
           <CardContent className="p-3 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="h-8 w-8 rounded-full bg-warning/15 flex items-center justify-center"><AlertTriangle className="h-4 w-4 text-warning" /></div>
+              <div className="h-9 w-9 rounded-xl bg-warning/15 flex items-center justify-center shrink-0"><AlertTriangle className="h-4 w-4 text-warning" /></div>
               <div>
-                <p className="text-sm font-medium text-foreground">Pending Approvals</p>
+                <p className="text-sm font-semibold text-foreground">Pending Approvals</p>
                 <p className="text-xs text-muted-foreground">{[pendingLeaves > 0 && `${pendingLeaves} leave request${pendingLeaves > 1 ? "s" : ""}`, pendingExpenses > 0 && `${pendingExpenses} expense${pendingExpenses > 1 ? "s" : ""}`, openWO > 0 && `${openWO} work order${openWO > 1 ? "s" : ""}`].filter(Boolean).join(" • ")}</p>
               </div>
             </div>
-            <Button variant="outline" size="sm" className="h-8 text-xs gap-1" onClick={() => navigate("/approvals")}>Review <ChevronRight className="h-3 w-3" /></Button>
+            <Button variant="outline" size="sm" className="h-8 text-xs gap-1 rounded-lg shrink-0" onClick={() => navigate("/approvals")}>Review <ChevronRight className="h-3 w-3" /></Button>
           </CardContent>
         </Card>
       )}
 
-      {/* KPI Grid */}
-      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+      {/* KPI Grid - improved mobile layout */}
+      <div className="grid gap-2 sm:gap-3 grid-cols-2 lg:grid-cols-4">
         {[
-          { title: "Employees", value: employeeCount.toString(), sub: `${presentToday} present today (${attendanceRate}%)`, icon: Users, trend: "up" as const, color: "text-primary", progress: attendanceRate },
-          { title: "Task Completion", value: `${taskCompletionRate}%`, sub: `${completedTasks} of ${totalTasks} tasks done`, icon: CheckSquare, trend: taskCompletionRate >= 50 ? "up" as const : "down" as const, color: "text-info", progress: taskCompletionRate },
-          { title: "Revenue", value: `AED ${totalIncome.toLocaleString()}`, sub: `${profitMargin}% profit margin`, icon: DollarSign, trend: netProfit >= 0 ? "up" as const : "down" as const, color: "text-success" },
-          { title: "Net Profit", value: `AED ${netProfit.toLocaleString()}`, sub: `AED ${totalExpense.toLocaleString()} spent`, icon: TrendingUp, trend: netProfit >= 0 ? "up" as const : "down" as const, color: netProfit >= 0 ? "text-success" : "text-destructive" },
-          { title: "Active Projects", value: activeProjects.length.toString(), sub: `${projects?.length ?? 0} total projects`, icon: Briefcase, trend: "up" as const, color: "text-primary" },
-          { title: "Unpaid Invoices", value: unpaidInvoices.toString(), sub: `AED ${unpaidTotal.toLocaleString()} outstanding`, icon: FileText, trend: unpaidInvoices > 0 ? "down" as const : "up" as const, color: "text-warning" },
-          { title: "Open Work Orders", value: openWO.toString(), sub: `${highPriority} high priority tasks`, icon: Wrench, trend: openWO > 5 ? "down" as const : "up" as const, color: "text-info" },
-          { title: "HSE Incidents", value: openHSE.toString(), sub: openHSE === 0 ? "All clear ✓" : `${openHSE} need attention`, icon: Shield, trend: openHSE > 0 ? "down" as const : "up" as const, color: openHSE > 0 ? "text-destructive" : "text-success" },
-        ].map((kpi) => (
-          <Card key={kpi.title} className="group border shadow-sm hover:shadow-md transition-all duration-200 hover:border-primary/20">
-            <CardContent className="p-4">
+          { title: "Employees", value: employeeCount.toString(), sub: `${presentToday} present (${attendanceRate}%)`, icon: Users, trend: "up" as const, color: "text-primary", bgColor: "from-primary/15 to-primary/5", progress: attendanceRate },
+          { title: "Task Completion", value: `${taskCompletionRate}%`, sub: `${completedTasks}/${totalTasks} done`, icon: CheckSquare, trend: taskCompletionRate >= 50 ? "up" as const : "down" as const, color: "text-info", bgColor: "from-info/15 to-info/5", progress: taskCompletionRate },
+          { title: "Revenue", value: `AED ${totalIncome.toLocaleString()}`, sub: `${profitMargin}% margin`, icon: DollarSign, trend: netProfit >= 0 ? "up" as const : "down" as const, color: "text-success", bgColor: "from-success/15 to-success/5" },
+          { title: "Net Profit", value: `AED ${netProfit.toLocaleString()}`, sub: `AED ${totalExpense.toLocaleString()} spent`, icon: TrendingUp, trend: netProfit >= 0 ? "up" as const : "down" as const, color: netProfit >= 0 ? "text-success" : "text-destructive", bgColor: netProfit >= 0 ? "from-success/15 to-success/5" : "from-destructive/15 to-destructive/5" },
+          { title: "Active Projects", value: activeProjects.length.toString(), sub: `${projects?.length ?? 0} total`, icon: Briefcase, trend: "up" as const, color: "text-primary", bgColor: "from-primary/15 to-primary/5" },
+          { title: "Unpaid Invoices", value: unpaidInvoices.toString(), sub: `AED ${unpaidTotal.toLocaleString()}`, icon: FileText, trend: unpaidInvoices > 0 ? "down" as const : "up" as const, color: "text-warning", bgColor: "from-warning/15 to-warning/5" },
+          { title: "Open Work Orders", value: openWO.toString(), sub: `${highPriority} high priority`, icon: Wrench, trend: openWO > 5 ? "down" as const : "up" as const, color: "text-info", bgColor: "from-info/15 to-info/5" },
+          { title: "HSE Incidents", value: openHSE.toString(), sub: openHSE === 0 ? "All clear ✓" : `${openHSE} need attention`, icon: Shield, trend: openHSE > 0 ? "down" as const : "up" as const, color: openHSE > 0 ? "text-destructive" : "text-success", bgColor: openHSE > 0 ? "from-destructive/15 to-destructive/5" : "from-success/15 to-success/5" },
+        ].map((kpi, idx) => (
+          <Card key={kpi.title} className={`group card-hover border shadow-sm overflow-hidden opacity-0 animate-fade-in stagger-${idx + 1}`}>
+            <CardContent className="p-3 sm:p-4">
               <div className="flex items-start justify-between">
-                <div className="space-y-1.5">
-                  <p className="text-[11px] font-medium uppercase tracking-wider text-muted-foreground">{kpi.title}</p>
-                  <p className="text-xl font-bold tracking-tight text-foreground">{kpi.value}</p>
+                <div className="space-y-1 min-w-0 flex-1">
+                  <p className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{kpi.title}</p>
+                  <p className="text-lg sm:text-xl font-bold tracking-tight text-foreground tabular-nums">{kpi.value}</p>
                 </div>
-                <div className={`flex h-9 w-9 items-center justify-center rounded-lg bg-secondary group-hover:scale-110 transition-transform ${kpi.color}`}>
-                  <kpi.icon className="h-4 w-4" />
+                <div className={`flex h-9 w-9 sm:h-10 sm:w-10 items-center justify-center rounded-xl bg-gradient-to-br ${kpi.bgColor} group-hover:scale-110 transition-transform duration-300 shrink-0 ${kpi.color}`}>
+                  <kpi.icon className="h-4 w-4 sm:h-[18px] sm:w-[18px]" />
                 </div>
               </div>
-              {"progress" in kpi && kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1 mt-2.5" />}
-              <div className="flex items-center gap-1 mt-2 text-[11px] text-muted-foreground">
-                {kpi.trend === "up" ? <TrendingUp className="h-3 w-3 text-success" /> : <TrendingDown className="h-3 w-3 text-destructive" />}
-                <span>{kpi.sub}</span>
+              {"progress" in kpi && kpi.progress !== undefined && <Progress value={kpi.progress} className="h-1.5 mt-2.5 rounded-full" />}
+              <div className="flex items-center gap-1 mt-2 text-[10px] sm:text-[11px] text-muted-foreground">
+                {kpi.trend === "up" ? <TrendingUp className="h-3 w-3 text-success shrink-0" /> : <TrendingDown className="h-3 w-3 text-destructive shrink-0" />}
+                <span className="truncate">{kpi.sub}</span>
               </div>
             </CardContent>
           </Card>
@@ -408,20 +417,20 @@ export default function Dashboard() {
       </div>
 
       {/* Charts Row */}
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2 border shadow-sm">
-          <CardHeader className="pb-2">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-2 card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Revenue vs Expenses</CardTitle>
-              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last {rangeMonths} month{rangeMonths > 1 ? "s" : ""}</span>
+              <span className="text-[10px] text-muted-foreground uppercase tracking-wider">Last {rangeMonths}mo</span>
             </div>
           </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={280}>
+          <CardContent className="px-2 sm:px-6">
+            <ResponsiveContainer width="100%" height={260}>
               <AreaChart data={revenueChart}>
                 <defs>
                   <linearGradient id="incomeGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.2} />
+                    <stop offset="5%" stopColor="hsl(var(--success))" stopOpacity={0.25} />
                     <stop offset="95%" stopColor="hsl(var(--success))" stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="expenseGrad" x1="0" y1="0" x2="0" y2="1">
@@ -429,36 +438,36 @@ export default function Dashboard() {
                     <stop offset="95%" stopColor="hsl(var(--destructive))" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" className="stroke-border" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" vertical={false} />
                 <XAxis dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 11 }} axisLine={false} tickLine={false} width={50} />
-                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px", boxShadow: "0 4px 12px rgba(0,0,0,0.08)" }} />
+                <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={45} />
+                <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "10px", fontSize: "12px", boxShadow: "0 8px 30px -8px rgba(0,0,0,0.12)" }} />
                 <Area type="monotone" dataKey="income" stroke="hsl(var(--success))" strokeWidth={2.5} fill="url(#incomeGrad)" name="Income" />
-                <Area type="monotone" dataKey="expense" stroke="hsl(var(--destructive))" strokeWidth={2} fill="url(#expenseGrad)" name="Expense" />
+                <Area type="monotone" dataKey="expense" stroke="hsl(var(--destructive))" strokeWidth={2} fill="url(#expenseGrad)" name="Expense" strokeDasharray="4 4" />
               </AreaChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Task Distribution</CardTitle></CardHeader>
-          <CardContent className="flex flex-col items-center">
+        <Card className="card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6"><CardTitle className="text-sm font-semibold">Task Distribution</CardTitle></CardHeader>
+          <CardContent className="flex flex-col items-center px-3 sm:px-6">
             {taskDist.length > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={170}>
                   <PieChart>
-                    <Pie data={taskDist} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
+                    <Pie data={taskDist} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={4} dataKey="value" strokeWidth={0}>
                       {taskDist.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px", fontSize: "12px" }} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="flex flex-wrap gap-3 mt-2 justify-center">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 justify-center">
                   {taskDist.map(d => (
                     <div key={d.name} className="flex items-center gap-1.5 text-[11px]">
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                      <div className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: d.color }} />
                       <span className="text-muted-foreground">{d.name}</span>
-                      <span className="font-semibold">{d.value}</span>
+                      <span className="font-bold tabular-nums">{d.value}</span>
                     </div>
                   ))}
                 </div>
@@ -474,26 +483,26 @@ export default function Dashboard() {
       </div>
 
       {/* Second Charts Row */}
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Card className="border shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Project Status Overview</CardTitle></CardHeader>
-          <CardContent className="flex flex-col items-center">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
+        <Card className="card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6"><CardTitle className="text-sm font-semibold">Project Status</CardTitle></CardHeader>
+          <CardContent className="flex flex-col items-center px-3 sm:px-6">
             {projectDist.length > 0 ? (
               <>
-                <ResponsiveContainer width="100%" height={180}>
+                <ResponsiveContainer width="100%" height={170}>
                   <PieChart>
-                    <Pie data={projectDist} cx="50%" cy="50%" innerRadius={45} outerRadius={70} paddingAngle={3} dataKey="value">
+                    <Pie data={projectDist} cx="50%" cy="50%" innerRadius={42} outerRadius={68} paddingAngle={4} dataKey="value" strokeWidth={0}>
                       {projectDist.map((entry, i) => <Cell key={i} fill={entry.color} />)}
                     </Pie>
-                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px", fontSize: "12px" }} />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} />
                   </PieChart>
                 </ResponsiveContainer>
-                <div className="flex flex-wrap gap-3 mt-2 justify-center">
+                <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2 justify-center">
                   {projectDist.map(d => (
                     <div key={d.name} className="flex items-center gap-1.5 text-[11px]">
-                      <div className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: d.color }} />
+                      <div className="h-2.5 w-2.5 rounded-full shadow-sm" style={{ backgroundColor: d.color }} />
                       <span className="text-muted-foreground">{d.name}</span>
-                      <span className="font-semibold">{d.value}</span>
+                      <span className="font-bold tabular-nums">{d.value}</span>
                     </div>
                   ))}
                 </div>
@@ -507,17 +516,17 @@ export default function Dashboard() {
           </CardContent>
         </Card>
 
-        <Card className="border shadow-sm">
-          <CardHeader className="pb-2"><CardTitle className="text-sm font-semibold">Expense Breakdown by Category</CardTitle></CardHeader>
-          <CardContent>
+        <Card className="card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6"><CardTitle className="text-sm font-semibold">Expense Breakdown</CardTitle></CardHeader>
+          <CardContent className="px-2 sm:px-6">
             {expensePieData.length > 0 ? (
-              <ResponsiveContainer width="100%" height={220}>
+              <ResponsiveContainer width="100%" height={210}>
                 <BarChart data={expensePieData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-border" horizontal={false} />
+                  <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" horizontal={false} />
                   <XAxis type="number" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={80} />
-                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "6px", fontSize: "12px" }} formatter={(v: number) => `AED ${v.toLocaleString()}`} />
-                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
+                  <YAxis type="category" dataKey="name" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 10 }} axisLine={false} tickLine={false} width={75} />
+                  <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: "8px", fontSize: "12px" }} formatter={(v: number) => `AED ${v.toLocaleString()}`} />
+                  <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 6, 6, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             ) : (
@@ -531,7 +540,7 @@ export default function Dashboard() {
       </div>
 
       {/* AI Insights + Expiry Alerts */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-3">
         <AIInsightsWidget kpiData={{
           employees: employeeCount, presentToday, attendanceRate,
           totalIncome, totalExpense, netProfit,
@@ -543,33 +552,33 @@ export default function Dashboard() {
         <ExpiryAlertsWidget />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid gap-3 sm:gap-4 lg:grid-cols-2">
         {/* Active Projects */}
-        <Card className="border shadow-sm">
-          <CardHeader className="pb-2">
+        <Card className="card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Active Projects</CardTitle>
-              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/projects")}>View all <ChevronRight className="h-3 w-3" /></Button>
+              <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground rounded-lg" onClick={() => navigate("/projects")}>View all <ChevronRight className="h-3 w-3" /></Button>
             </div>
           </CardHeader>
-          <CardContent className="space-y-1">
+          <CardContent className="space-y-0.5 px-3 sm:px-6">
             {activeProjects.length > 0 ? activeProjects.slice(0, 6).map((p) => {
               const budgetUsed = p.budget && p.spent ? Math.min(Math.round((Number(p.spent) / Number(p.budget)) * 100), 100) : 0;
               return (
-                <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-border/50 last:border-0 group hover:bg-secondary/30 -mx-2 px-2 rounded transition-colors">
+                <div key={p.id} className="flex items-center justify-between py-2.5 border-b border-border/40 last:border-0 group hover:bg-secondary/40 -mx-2 px-2 rounded-lg transition-colors cursor-pointer" onClick={() => navigate("/projects")}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
                       <p className="text-xs font-medium text-foreground truncate">{p.name}</p>
-                      <Badge variant="outline" className="text-[9px] h-4 px-1.5">{p.priority}</Badge>
+                      <Badge variant="outline" className="text-[9px] h-4 px-1.5 rounded">{p.priority}</Badge>
                     </div>
                     <div className="flex items-center gap-2 mt-1">
                       <p className="text-[10px] text-muted-foreground">{p.project_no ?? "No ID"}</p>
-                      {p.budget && <><span className="text-[10px] text-muted-foreground">•</span><span className="text-[10px] text-muted-foreground">{budgetUsed}% budget used</span></>}
+                      {p.budget && <><span className="text-[10px] text-muted-foreground">•</span><span className="text-[10px] text-muted-foreground">{budgetUsed}% budget</span></>}
                     </div>
-                    {p.budget && <Progress value={budgetUsed} className="h-1 mt-1.5" />}
+                    {p.budget && <Progress value={budgetUsed} className="h-1 mt-1.5 rounded-full" />}
                   </div>
-                  <div className="flex items-center gap-1.5 ml-3">
-                    {p.budget && <span className="text-[10px] text-muted-foreground font-medium">AED {Number(p.budget).toLocaleString()}</span>}
+                  <div className="flex items-center gap-1.5 ml-3 shrink-0">
+                    {p.budget && <span className="text-[10px] text-muted-foreground font-medium tabular-nums hidden sm:inline">AED {Number(p.budget).toLocaleString()}</span>}
                     <ArrowUpRight className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
                 </div>
@@ -578,30 +587,30 @@ export default function Dashboard() {
               <div className="flex flex-col items-center py-8 gap-2">
                 <Briefcase className="h-8 w-8 text-muted-foreground/30" />
                 <p className="text-xs text-muted-foreground">No active projects</p>
-                {isManagerUp && <Button variant="outline" size="sm" className="h-7 text-xs gap-1 mt-1" onClick={() => navigate("/projects")}><Plus className="h-3 w-3" /> Create Project</Button>}
+                {isManagerUp && <Button variant="outline" size="sm" className="h-7 text-xs gap-1 mt-1 rounded-lg" onClick={() => navigate("/projects")}><Plus className="h-3 w-3" /> Create Project</Button>}
               </div>
             )}
           </CardContent>
         </Card>
 
         {/* Recent Activity */}
-        <Card className="border shadow-sm">
-          <CardHeader className="pb-2">
+        <Card className="card-hover border shadow-sm">
+          <CardHeader className="pb-2 px-3 sm:px-6">
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-semibold">Recent Activity</CardTitle>
-              {isAdmin && <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" onClick={() => navigate("/audit-logs")}>View all <ChevronRight className="h-3 w-3" /></Button>}
+              {isAdmin && <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground rounded-lg" onClick={() => navigate("/audit-logs")}>View all <ChevronRight className="h-3 w-3" /></Button>}
             </div>
           </CardHeader>
-          <CardContent>
+          <CardContent className="px-3 sm:px-6">
             {auditLogs && auditLogs.length > 0 ? (
               <div className="space-y-0.5">
                 {auditLogs.slice(0, 5).map((log: any) => (
-                  <div key={log.id} className="flex items-start justify-between py-2 border-b border-border/50 last:border-0 hover:bg-secondary/30 -mx-2 px-2 rounded transition-colors">
-                    <div className="min-w-0 flex items-start gap-2">
-                      <div className="h-6 w-6 rounded-full bg-primary/10 flex items-center justify-center shrink-0 mt-0.5"><Zap className="h-3 w-3 text-primary" /></div>
-                      <div>
+                  <div key={log.id} className="flex items-start justify-between py-2.5 border-b border-border/40 last:border-0 hover:bg-secondary/40 -mx-2 px-2 rounded-lg transition-colors">
+                    <div className="min-w-0 flex items-start gap-2.5">
+                      <div className="h-7 w-7 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5"><Zap className="h-3.5 w-3.5 text-primary" /></div>
+                      <div className="min-w-0">
                         <p className="text-xs font-medium text-foreground truncate">{log.action}</p>
-                        {log.details && <p className="text-[10px] text-muted-foreground truncate max-w-[250px]">{log.details}</p>}
+                        {log.details && <p className="text-[10px] text-muted-foreground truncate max-w-[220px] sm:max-w-[280px]">{log.details}</p>}
                       </div>
                     </div>
                     <span className="text-[10px] text-muted-foreground whitespace-nowrap ml-2 tabular-nums">{format(new Date(log.created_at), "HH:mm")}</span>

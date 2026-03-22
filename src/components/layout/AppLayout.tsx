@@ -25,38 +25,48 @@ export function AppLayout() {
 
   return (
     <SidebarProvider>
-      <div className="min-h-screen flex w-full">
+      <div className="min-h-screen flex w-full bg-background">
         <AppSidebar />
         <div className="flex-1 flex flex-col min-w-0">
-          <header className="h-12 flex items-center justify-between border-b border-border bg-card px-3 shrink-0">
-            <div className="flex items-center gap-1.5">
-              <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground">
+          {/* Enhanced header */}
+          <header className="h-14 flex items-center justify-between border-b border-border/60 bg-card/80 backdrop-blur-xl px-3 sm:px-4 shrink-0 sticky top-0 z-30">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              <SidebarTrigger className="h-9 w-9 text-muted-foreground hover:text-foreground hover:bg-secondary rounded-lg transition-colors">
                 <PanelLeft className="h-4 w-4" />
               </SidebarTrigger>
-              <Separator orientation="vertical" className="h-5 mx-1" />
+              <Separator orientation="vertical" className="h-5 mx-0.5 sm:mx-1 hidden sm:block" />
               <Button
                 variant="ghost"
                 size="sm"
-                className="hidden md:flex items-center gap-2 text-muted-foreground h-7 w-52 justify-start text-xs font-normal hover:bg-secondary rounded-sm border border-border"
+                className="hidden md:flex items-center gap-2 text-muted-foreground h-8 w-56 justify-start text-xs font-normal hover:bg-secondary/80 rounded-lg border border-border/50 bg-secondary/30"
                 onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
               >
-                <Search className="h-3 w-3" />
-                <span>Search...</span>
-                <kbd className="ml-auto text-[10px] bg-muted px-1.5 py-0.5 rounded font-mono text-muted-foreground">⌘K</kbd>
+                <Search className="h-3.5 w-3.5" />
+                <span>Search anything...</span>
+                <kbd className="ml-auto text-[10px] bg-background/80 px-1.5 py-0.5 rounded font-mono text-muted-foreground border border-border/50">⌘K</kbd>
+              </Button>
+              {/* Mobile search button */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className="md:hidden h-9 w-9 text-muted-foreground hover:text-foreground"
+                onClick={() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true }))}
+              >
+                <Search className="h-4 w-4" />
               </Button>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 sm:gap-2">
               <ThemeToggle />
               <NotificationBell />
-              <Separator orientation="vertical" className="h-5" />
-              <div className="flex items-center gap-2 pl-1">
+              <Separator orientation="vertical" className="h-5 hidden sm:block" />
+              <div className="flex items-center gap-2 pl-1 cursor-pointer hover:bg-secondary/50 rounded-lg px-2 py-1.5 transition-colors -mr-1">
                 <div className="hidden sm:flex flex-col items-end leading-none">
-                  <span className="text-xs font-medium text-foreground">{displayName}</span>
-                  <span className="text-[10px] text-muted-foreground">{roleLabel}</span>
+                  <span className="text-xs font-semibold text-foreground">{displayName}</span>
+                  <span className="text-[10px] text-muted-foreground mt-0.5">{roleLabel}</span>
                 </div>
-                <Avatar className="h-7 w-7">
+                <Avatar className="h-8 w-8 ring-2 ring-primary/10 ring-offset-1 ring-offset-background">
                   {profile?.avatar_url && <AvatarImage src={profile.avatar_url} alt={displayName} />}
-                  <AvatarFallback className="bg-primary text-primary-foreground text-[10px] font-semibold">
+                  <AvatarFallback className="bg-gradient-to-br from-primary to-primary/80 text-primary-foreground text-[10px] font-bold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
@@ -64,7 +74,8 @@ export function AppLayout() {
             </div>
           </header>
 
-          <main className="flex-1 overflow-auto p-4 md:p-6">
+          {/* Main content with better padding on mobile */}
+          <main className="flex-1 overflow-auto p-3 sm:p-4 md:p-6 scrollbar-thin">
             <Outlet />
           </main>
         </div>
