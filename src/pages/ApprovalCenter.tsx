@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { toast } from "@/hooks/use-toast";
 import { format } from "date-fns";
-import { CheckCircle, XCircle, Clock, UserMinus, CreditCard, ShoppingCart, FileText, Quote } from "lucide-react";
+import { CheckCircle, XCircle, Clock, UserMinus, CreditCard, ShoppingCart, FileText, Quote , AlertTriangle } from "lucide-react";
 import { logAudit } from "@/lib/audit";
 
 export default function ApprovalCenter() {
@@ -18,7 +18,7 @@ export default function ApprovalCenter() {
   const qc = useQueryClient();
   const [confirmAction, setConfirmAction] = useState<{ type: string; id: string; action: "approve" | "reject"; table: string } | null>(null);
 
-  const { data: leaves = [] } = useQuery({
+  const { data: leaves = [] , isError: dataLoadError} = useQuery({
     queryKey: ["approval-leaves"],
     queryFn: async () => {
       const { data } = await supabase.from("leave_requests").select("*, employees(name)").eq("status", "pending").order("created_at", { ascending: false });
@@ -109,6 +109,16 @@ export default function ApprovalCenter() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Approval Center</h1>

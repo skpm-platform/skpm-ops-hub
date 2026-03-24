@@ -139,6 +139,16 @@ function FinanceSettingsTab() {
 
   return (
     <div className="space-y-4">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <Card>
         <CardHeader>
           <CardTitle className="text-base flex items-center gap-2"><DollarSign className="h-4 w-4" /> Financial Configuration</CardTitle>
@@ -434,7 +444,7 @@ function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
   };
 
   // Recent audit logs
-  const { data: recentLogs } = useQuery({
+  const { data: recentLogs , isError: dataLoadError} = useQuery({
     queryKey: ["recent-audit-logs"],
     queryFn: async () => {
       const { data } = await supabase.from("audit_logs").select("*").order("created_at", { ascending: false }).limit(10);

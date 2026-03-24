@@ -12,14 +12,14 @@ import {
   AreaChart, Area, PieChart, Pie, Cell, LineChart, Line,
 } from "recharts";
 import { format, subMonths, startOfMonth, endOfMonth, differenceInDays, parseISO } from "date-fns";
-import { TrendingUp, TrendingDown, DollarSign, FileText, Download, Calculator } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, FileText, Download, Calculator , AlertTriangle } from "lucide-react";
 import { ExportButton } from "@/components/ExportButton";
 
 export default function FinancialReports() {
   const [period, setPeriod] = useState("12m");
   const months = period === "3m" ? 3 : period === "6m" ? 6 : 12;
 
-  const { data: transactions = [] } = useQuery({
+  const { data: transactions = [] , isError: dataLoadError} = useQuery({
     queryKey: ["fin-reports-tx", months],
     queryFn: async () => {
       const rangeAgo = format(subMonths(new Date(), months), "yyyy-MM-dd");
@@ -102,6 +102,16 @@ export default function FinancialReports() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground tracking-tight">Financial Reports</h1>

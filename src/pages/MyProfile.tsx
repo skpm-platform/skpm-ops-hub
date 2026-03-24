@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { format, startOfMonth, endOfMonth } from "date-fns";
-import { Calendar, Clock, UserMinus, Wallet, FileText, CheckSquare, TrendingUp } from "lucide-react";
+import { Calendar, Clock, UserMinus, Wallet, FileText, CheckSquare, TrendingUp, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 export default function MyProfile() {
   const { user } = useAuth();
@@ -15,7 +16,7 @@ export default function MyProfile() {
   const { data: role } = useUserRole();
 
   // Find employee record linked to this user
-  const { data: employee } = useQuery({
+  const { data: employee, isError: employeeError } = useQuery({
     queryKey: ["my-employee", user?.id],
     queryFn: async () => {
       if (!user) return null;
@@ -26,7 +27,7 @@ export default function MyProfile() {
   });
 
   // My attendance this month
-  const { data: myAttendance = [] } = useQuery({
+  const { data: myAttendance = [], isError: attendanceError } = useQuery({
     queryKey: ["my-attendance", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -39,7 +40,7 @@ export default function MyProfile() {
   });
 
   // My leave requests
-  const { data: myLeaves = [] } = useQuery({
+  const { data: myLeaves = [], isError: leavesError } = useQuery({
     queryKey: ["my-leaves", employee?.id],
     queryFn: async () => {
       if (!employee) return [];
@@ -50,7 +51,7 @@ export default function MyProfile() {
   });
 
   // My tasks
-  const { data: myTasks = [] } = useQuery({
+  const { data: myTasks = [], isError: tasksError } = useQuery({
     queryKey: ["my-tasks", user?.id],
     queryFn: async () => {
       if (!user) return [];
@@ -61,7 +62,7 @@ export default function MyProfile() {
   });
 
   // My payroll
-  const { data: myPayroll = [] } = useQuery({
+  const { data: myPayroll = [], isError: payrollError } = useQuery({
     queryKey: ["my-payroll", employee?.id],
     queryFn: async () => {
       if (!employee) return [];
@@ -82,6 +83,20 @@ export default function MyProfile() {
   return (
     <div className="space-y-6 animate-fade-in">
       <h1 className="text-xl font-semibold text-foreground">My Profile</h1>
+
+            {/* Error Banner */}
+      {(employeeError || attendanceError || leavesError || tasksError || payrollError) && (
+        <Card className="border-destructive/50 bg-destructive/5">
+          <CardContent className="flex items-center gap-3 p-4">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+            <div>
+              <p className="text-sm font-medium text-destructive">Some data could not be loaded</p>
+              <p className="text-xs text-muted-foreground">Please refresh the page or contact your administrator if the issue persists.</p>
+            </div>
+            <Button variant="outline" size="sm" className="ml-auto shrink-0" onClick={() => window.location.reload()}>Retry</Button>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Profile Card */}
       <Card>

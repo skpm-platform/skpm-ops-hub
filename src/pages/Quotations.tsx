@@ -12,7 +12,7 @@ import { Separator } from "@/components/ui/separator";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, FileSignature, Pencil, Trash2, Eye, Printer, Send } from "lucide-react";
+import { Plus, Search, FileSignature, Pencil, Trash2, Eye, Printer, Send , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -48,7 +48,7 @@ export default function Quotations() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [bulkDeleteOpen, setBulkDeleteOpen] = useState(false);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["quotations"],
     queryFn: async () => { const { data } = await (supabase as any).from("quotations").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
@@ -202,6 +202,16 @@ export default function Quotations() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3"><FileSignature className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Quotations</h1></div>
         <div className="flex gap-2">

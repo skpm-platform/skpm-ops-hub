@@ -1,3 +1,4 @@
+import { checkLoginRateLimit, recordLoginAttempt, getRemainingAttempts } from "@/lib/rate-limit";
 import { useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -16,12 +17,19 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "forgot">("login");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const logoSrc = companyLogoUrl || skpmLogo;
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrors({});
+    const rateCheck = checkLoginRateLimit();
+    if (!rateCheck.allowed) {
+      setLockoutSeconds(rateCheck.remainingSeconds);
+      toast.error(`Too many attempts. Try again in ${rateCheck.remainingSeconds}s`);
+      return;
+    }
     const result = loginSchema.safeParse({ email, password });
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -33,7 +41,17 @@ export default function Login() {
     }
     setLoading(true);
     const { error } = await supabase.auth.signInWithPassword({ email: result.data.email, password: result.data.password });
-    if (error) toast.error(error.message);
+    if (error) {
+      recordLoginAttempt(false);
+      const remaining = getRemainingAttempts();
+      if (remaining > 0 && remaining <= 3) {
+        toast.error(`${error.message}. ${remaining} attempts remaining.`);
+      } else {
+        toast.error(error.message);
+      }
+    } else {
+      recordLoginAttempt(true);
+    }
     setLoading(false);
   };
 
@@ -49,7 +67,17 @@ export default function Login() {
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     });
-    if (error) toast.error(error.message);
+    if (error) {
+      recordLoginAttempt(false);
+      const remaining = getRemainingAttempts();
+      if (remaining > 0 && remaining <= 3) {
+        toast.error(`${error.message}. ${remaining} attempts remaining.`);
+      } else {
+        toast.error(error.message);
+      }
+    } else {
+      recordLoginAttempt(true);
+    }
     else toast.success("Check your email for a password reset link!");
     setLoading(false);
   };

@@ -73,7 +73,7 @@ export default function Members() {
   const [form, setForm] = useState({ name: "", status: "active", avatar_url: "", role: "staff" });
   const [deletingMember, setDeletingMember] = useState<any>(null);
 
-  const { data: profiles = [], isLoading } = useQuery({
+  const { data: profiles = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["members"],
     queryFn: async () => {
       const { data } = await supabase.from("profiles").select("*").order("created_at", { ascending: false });
@@ -265,6 +265,16 @@ export default function Members() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <Users className="h-7 w-7 text-primary" />

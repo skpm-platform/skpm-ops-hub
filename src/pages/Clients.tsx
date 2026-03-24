@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Plus, Search, Briefcase, Pencil, Trash2, Eye, LayoutGrid, List, Building2, MapPin, Globe, Phone } from "lucide-react";
+import { Plus, Search, Briefcase, Pencil, Trash2, Eye, LayoutGrid, List, Building2, MapPin, Globe, Phone , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -47,7 +47,7 @@ export default function Clients() {
   const [form, setForm] = useState(emptyForm);
   const [viewMode, setViewMode] = useState<"table" | "grid">("table");
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["clients"],
     queryFn: async () => { const { data } = await supabase.from("clients").select("*").order("created_at", { ascending: false }); return data || []; },
   });
@@ -102,6 +102,16 @@ export default function Clients() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Briefcase className="h-5 w-5 text-primary" /></div>

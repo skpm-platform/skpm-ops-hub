@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Loader2, CalendarDays, Sun, Moon, Scissors, Clock, Users } from "lucide-react";
+import { Plus, Search, Loader2, CalendarDays, Sun, Moon, Scissors, Clock, Users , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -29,7 +29,7 @@ export default function DutyRoster() {
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "", employee_id: "" });
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["duty_roster"],
     queryFn: async () => {
       const { data, error } = await supabase.from("duty_roster").select("*, employees(name), sites(name)").order("date", { ascending: false });
@@ -70,6 +70,16 @@ export default function DutyRoster() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><CalendarDays className="h-5 w-5 text-primary" /></div>

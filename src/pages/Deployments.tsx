@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Search, Loader2, Users, DollarSign, Eye, LayoutGrid,
   List, TrendingUp, Pencil, Trash2, Calculator, MapPin, Calendar,
-} from "lucide-react";
+, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -63,7 +63,7 @@ export default function Deployments() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["deployments"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -203,6 +203,16 @@ export default function Deployments() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">

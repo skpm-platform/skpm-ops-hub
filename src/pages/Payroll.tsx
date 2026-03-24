@@ -12,7 +12,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight, Printer, CheckCircle, ChevronLeft, ChevronRight, Download, Zap } from "lucide-react";
+import { Plus, Search, Wallet, Pencil, Trash2, Eye, TrendingUp, Users, DollarSign, LayoutGrid, List, ArrowUpRight, ArrowDownRight, Printer, CheckCircle, ChevronLeft, ChevronRight, Download, Zap , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -53,7 +53,7 @@ export default function Payroll() {
     overtime_pay: "", deductions: "", status: "draft", payable_days: "30",
   });
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["payroll"],
     queryFn: async () => { const { data } = await (supabase as any).from("payroll").select("*, employees(name)").order("created_at", { ascending: false }); return data || []; },
   });
@@ -270,6 +270,16 @@ export default function Payroll() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Wallet className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Payroll</h1><p className="text-sm text-muted-foreground">{data.length} records</p></div></div>
         <div className="flex gap-2 flex-wrap">

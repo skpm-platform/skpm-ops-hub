@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Textarea } from "@/components/ui/textarea";
 import { ComboboxSelect } from "@/components/ComboboxSelect";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
-import { Plus, Calendar, ChevronLeft, ChevronRight, Trash2, Eye, Loader2 } from "lucide-react";
+import { Plus, Calendar, ChevronLeft, ChevronRight, Trash2, Eye, Loader2 , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameDay, addMonths, subMonths } from "date-fns";
 
@@ -28,7 +28,7 @@ export default function CalendarPage() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ title: "", type: "meeting", start_datetime: "", end_datetime: "", description: "", location: "" });
 
-  const { data: events = [], isLoading } = useQuery({
+  const { data: events = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["events", format(currentMonth, "yyyy-MM")],
     queryFn: async () => {
       const start = startOfMonth(currentMonth).toISOString();
@@ -60,6 +60,16 @@ export default function CalendarPage() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3"><Calendar className="h-7 w-7 text-primary" /><h1 className="text-2xl font-bold">Calendar</h1></div>
         <div className="flex items-center gap-2">

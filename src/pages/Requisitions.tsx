@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Plus, Search, ClipboardList, CheckCircle, Clock, XCircle,
   Users, Pencil, Trash2, Eye, Loader2,
-} from "lucide-react";
+, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -76,7 +76,7 @@ export default function Requisitions() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["requisitions"],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -196,6 +196,16 @@ export default function Requisitions() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">

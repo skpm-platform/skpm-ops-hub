@@ -40,7 +40,7 @@ export default function Contracts() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["contracts"],
     queryFn: async () => { const { data } = await supabase.from("contracts").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
@@ -125,6 +125,16 @@ export default function Contracts() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><FileText className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Contracts & AMC</h1><p className="text-sm text-muted-foreground">{data.length} contracts</p></div></div>
         <div className="flex gap-2">
