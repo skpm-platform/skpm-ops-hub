@@ -77,8 +77,8 @@ export default function Login() {
       }
     } else {
       recordLoginAttempt(true);
+      toast.success("Check your email for a password reset link!");
     }
-    else toast.success("Check your email for a password reset link!");
     setLoading(false);
   };
 
