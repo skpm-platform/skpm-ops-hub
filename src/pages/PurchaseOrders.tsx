@@ -24,7 +24,7 @@ import {
   Plus, Search, ShoppingCart, Eye, Trash2, Loader2, Pencil,
   CheckCircle2, Clock, Package, DollarSign, FileText, TrendingUp,
   ArrowRight,
-, AlertTriangle } from "lucide-react";
+  AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 

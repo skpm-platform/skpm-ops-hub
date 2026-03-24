@@ -27,7 +27,7 @@ import { SortableHeader } from "@/components/SortableHeader";
 import {
   Plus, TrendingUp, TrendingDown, DollarSign, Loader2, Search,
   Trash2, Eye, Wallet, ArrowUpRight, ArrowDownRight, PieChartIcon, Pencil,
-, AlertTriangle } from "lucide-react";
+  AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, subMonths, startOfMonth, endOfMonth } from "date-fns";
 

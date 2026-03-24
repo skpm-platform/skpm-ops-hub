@@ -15,7 +15,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   Plus, Search, Loader2, Users, DollarSign, Eye, LayoutGrid,
   List, TrendingUp, Pencil, Trash2, Calculator, MapPin, Calendar,
-, AlertTriangle } from "lucide-react";
+  AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format, differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
