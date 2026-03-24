@@ -24,7 +24,7 @@ import {
   Plus, Search, ShoppingCart, Eye, Trash2, Loader2, Pencil,
   CheckCircle2, Clock, Package, DollarSign, FileText, TrendingUp,
   ArrowRight,
-} from "lucide-react";
+, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -59,7 +59,7 @@ export default function PurchaseOrders() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["purchase_orders"],
     queryFn: async () => {
       const { data } = await supabase.from("purchase_orders").select("*").order("created_at", { ascending: false });
@@ -163,6 +163,16 @@ export default function PurchaseOrders() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">

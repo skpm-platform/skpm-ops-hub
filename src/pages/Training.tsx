@@ -10,7 +10,7 @@ import { Progress } from "@/components/ui/progress";
 import { Table, TableBody, TableCell, TableHeader, TableRow } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Plus, Search, GraduationCap, Pencil, Trash2, Eye, LayoutGrid, List, ShieldCheck, Zap, BookOpen, HeartPulse, UserCheck, Award, DollarSign, CheckCircle } from "lucide-react";
+import { Plus, Search, GraduationCap, Pencil, Trash2, Eye, LayoutGrid, List, ShieldCheck, Zap, BookOpen, HeartPulse, UserCheck, Award, DollarSign, CheckCircle , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { differenceInDays } from "date-fns";
 import { useDataTable } from "@/hooks/use-data-table";
@@ -72,7 +72,7 @@ export default function Training() {
     completion_pct: "0", cost: "", certificate_expiry: "", result: "In Progress", provider: "",
   });
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["training"],
     queryFn: async () => { const { data } = await (supabase as any).from("training_programs").select("*").order("date", { ascending: false }); return data || []; },
   });
@@ -141,6 +141,16 @@ export default function Training() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><GraduationCap className="h-5 w-5 text-primary" /></div>

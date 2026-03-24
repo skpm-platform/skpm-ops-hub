@@ -68,7 +68,7 @@ export default function WorkOrders() {
   const [form, setForm] = useState(emptyForm);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
 
-  const { data = [], isLoading } = useQuery({
+  const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["work_orders"],
     queryFn: async () => { const { data } = await supabase.from("work_orders").select("*").order("created_at", { ascending: false }); return data || []; },
   });
@@ -189,6 +189,16 @@ export default function WorkOrders() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3"><Wrench className="h-7 w-7 text-primary" /><div><h1 className="text-2xl font-bold">Work Orders</h1><p className="text-sm text-muted-foreground">{data.length} total</p></div></div>
         <div className="flex gap-2">

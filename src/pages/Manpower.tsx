@@ -141,7 +141,7 @@ export default function Manpower() {
   const [viewing, setViewing] = useState<any>(null);
   const [form, setForm] = useState(emptyForm);
 
-  const { data: workers = [], isLoading } = useQuery({
+  const { data: workers = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["workers"],
     queryFn: async () => {
       const { data } = await supabase.from("workers").select("*").order("created_at", { ascending: false });
@@ -305,6 +305,16 @@ export default function Manpower() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">

@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
-import { Plus, Search, Loader2, Banknote, DollarSign, Users, TrendingUp, Eye, Pencil, Trash2, CheckCircle, Receipt } from "lucide-react";
+import { Plus, Search, Loader2, Banknote, DollarSign, Users, TrendingUp, Eye, Pencil, Trash2, CheckCircle, Receipt , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
@@ -40,7 +40,7 @@ export default function MPBilling() {
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [form, setForm] = useState({ month: new Date().getMonth() + 1, year: new Date().getFullYear(), total_workers: 0, total_days: 0, rate: 0, notes: "", client_id: "", project_id: "" });
 
-  const { data: rows = [], isLoading } = useQuery({
+  const { data: rows = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["mp_billing"],
     queryFn: async () => {
       const { data, error } = await supabase.from("mp_billing").select("*, clients(name), projects(name)").order("created_at", { ascending: false });
@@ -134,6 +134,16 @@ export default function MPBilling() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Banknote className="h-5 w-5 text-primary" /></div>

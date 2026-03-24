@@ -17,7 +17,7 @@ import { StatusFilter, buildStatuses } from "@/components/StatusFilter";
 import { useDataTable } from "@/hooks/use-data-table";
 import { DataTablePagination } from "@/components/DataTablePagination";
 import { SortableHeader } from "@/components/SortableHeader";
-import { Plus, FileText, Download, Search, Trash2, Upload, Loader2, Eye, File, Image, FileSpreadsheet } from "lucide-react";
+import { Plus, FileText, Download, Search, Trash2, Upload, Loader2, Eye, File, Image, FileSpreadsheet , AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
 import { format } from "date-fns";
 
@@ -41,7 +41,7 @@ export default function Documents() {
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
 
-  const { data: docs = [], isLoading } = useQuery({
+  const { data: docs = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["documents"],
     queryFn: async () => { const { data, error } = await supabase.from("documents").select("*").order("created_at", { ascending: false }); if (error) throw error; return data ?? []; },
   });
@@ -87,6 +87,16 @@ export default function Documents() {
 
   return (
     <div className="space-y-6">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div><h1 className="text-2xl font-bold">Documents</h1><p className="text-muted-foreground">Manage files and documents</p></div>
         <div className="flex gap-2">

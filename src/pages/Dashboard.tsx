@@ -39,7 +39,7 @@ export default function Dashboard() {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
 
-  const { data: employees } = useQuery({
+  const { data: employees , isError: dataLoadError} = useQuery({
     queryKey: ["dashboard-employees"],
     queryFn: async () => {
       const { count } = await supabase.from("employees").select("*", { count: "exact", head: true });
@@ -250,6 +250,16 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in max-w-[1600px] mx-auto">
+      {dataLoadError && (
+        <div className="rounded-lg border border-destructive/50 bg-destructive/5 p-4 flex items-center gap-3 mb-4">
+          <AlertTriangle className="h-5 w-5 text-destructive shrink-0" />
+          <div className="flex-1">
+            <p className="text-sm font-medium text-destructive">Failed to load some data</p>
+            <p className="text-xs text-muted-foreground">Please refresh or contact your administrator.</p>
+          </div>
+          <button onClick={() => window.location.reload()} className="text-xs underline text-muted-foreground hover:text-foreground">Retry</button>
+        </div>
+      )}
       {/* Welcome Header */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
         <div className="space-y-1.5">
