@@ -91,11 +91,11 @@ export default function HSE() {
       if (editingId) {
         const { error } = await (supabase as any).from("hse_incidents").update(form).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated HSE incident", form.type);
+        await logAudit("Updated HSE incident", form.type, "hse");
       } else {
         const { error } = await (supabase as any).from("hse_incidents").insert({ ...form, reported_by: user?.id });
         if (error) throw error;
-        await logAudit("Reported HSE incident", form.type);
+        await logAudit("Reported HSE incident", form.type, "hse");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["hse"] }); toast.success(editingId ? "Updated" : "Incident reported"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -106,7 +106,7 @@ export default function HSE() {
     mutationFn: async (id: string) => {
       const { error } = await (supabase as any).from("hse_incidents").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted HSE incident", id);
+      await logAudit("Deleted HSE incident", id, "hse");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["hse"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
@@ -117,7 +117,7 @@ export default function HSE() {
       const today = new Date().toISOString().split("T")[0];
       const { error } = await (supabase as any).from("hse_incidents").update({ status: "closed", closed_date: today }).eq("id", id);
       if (error) throw error;
-      await logAudit("Closed HSE incident", id);
+      await logAudit("Closed HSE incident", id, "hse");
     },
     onSuccess: (_, id) => {
       qc.invalidateQueries({ queryKey: ["hse"] });

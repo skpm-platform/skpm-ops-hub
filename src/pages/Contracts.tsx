@@ -58,11 +58,11 @@ export default function Contracts() {
       if (editingId) {
         const { error } = await (supabase as any).from("contracts").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated contract", `Contract ${editingId}`);
+        await logAudit("Updated contract", `Contract ${editingId}`, "contracts");
       } else {
         const { error } = await (supabase as any).from("contracts").insert({ ...payload, contract_no: `CON-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
-        await logAudit("Created contract", payload.type);
+        await logAudit("Created contract", payload.type, "contracts");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["contracts"] }); toast.success(editingId ? "Updated" : "Contract added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -73,7 +73,7 @@ export default function Contracts() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("contracts").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted contract", id);
+      await logAudit("Deleted contract", id, "contracts");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["contracts"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),

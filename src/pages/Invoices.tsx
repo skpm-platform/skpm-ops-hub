@@ -67,11 +67,11 @@ export default function Invoices() {
       if (editingId) {
         const { error } = await (supabase as any).from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status, payment_terms: form.payment_terms || null, notes: form.notes || null }).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated invoice", editingId);
+        await logAudit("Updated invoice", editingId, "invoices");
       } else {
         const { error } = await (supabase as any).from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null, payment_terms: form.payment_terms || null, notes: form.notes || null });
         if (error) throw error;
-        await logAudit("Created invoice", `AED ${(sub + vat).toLocaleString()}`);
+        await logAudit("Created invoice", `AED ${(sub + vat).toLocaleString()}`, "invoices");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success(editingId ? "Updated" : "Invoice created"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -82,7 +82,7 @@ export default function Invoices() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("invoices").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted invoice", id);
+      await logAudit("Deleted invoice", id, "invoices");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["invoices"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
@@ -92,7 +92,7 @@ export default function Invoices() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await (supabase as any).from("invoices").update({ status }).eq("id", id);
       if (error) throw error;
-      await logAudit("Updated invoice status", `${id} → ${status}`);
+      await logAudit("Updated invoice status", `${id} → ${status}`, "invoices");
     },
     onSuccess: (_, { status }) => {
       qc.invalidateQueries({ queryKey: ["invoices"] });

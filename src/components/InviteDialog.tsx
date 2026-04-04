@@ -137,7 +137,7 @@ Powered by SKPM Ops Hub`
         await (supabase.auth as any).admin?.inviteUserByEmail(form.email);
       } catch (_) { /* fallback - invitation recorded in DB */ }
 
-      await logAudit("Sent invitation", `Invited ${form.email} as ${form.role}`);
+      await logAudit("Sent invitation", `Invited ${form.email} as ${form.role}`, "members");
       return data;
     },
     onSuccess: (data) => {

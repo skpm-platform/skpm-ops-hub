@@ -67,7 +67,7 @@ export default function Reports() {
   const [previewCount, setPreviewCount] = useState(0);
 
   // Fetch record counts for all reports
-  const { data: counts = {}, isLoading: countsLoading, refetch: refetchCounts } = useQuery({
+  const { data: counts = {}, isLoading: countsLoading, isError: dataLoadError, refetch: refetchCounts } = useQuery({
     queryKey: ["report-counts"],
     queryFn: async () => {
       const result: Record<string, number> = {};

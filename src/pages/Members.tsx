@@ -122,7 +122,7 @@ export default function Members() {
         .from("user_roles")
         .upsert({ user_id: editingUserId, role: form.role as any } as any, { onConflict: "user_id" });
       if (roleError) throw roleError;
-      await logAudit("Updated member", `Updated ${form.name}: role=${form.role}, status=${form.status}`);
+      await logAudit("Updated member", `Updated ${form.name}: role=${form.role}, status=${form.status}`, "members");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members"] });
@@ -139,7 +139,7 @@ export default function Members() {
     mutationFn: async (profileId: string) => {
       const { error } = await supabase.from("profiles").update({ status: "inactive" }).eq("id", profileId);
       if (error) throw error;
-      await logAudit("Deactivated member", `Deactivated profile ${profileId}`);
+      await logAudit("Deactivated member", `Deactivated profile ${profileId}`, "members");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members"] });
@@ -153,7 +153,7 @@ export default function Members() {
     mutationFn: async (profileId: string) => {
       const { error } = await supabase.from("profiles").update({ status: "active" }).eq("id", profileId);
       if (error) throw error;
-      await logAudit("Reactivated member", `Reactivated profile ${profileId}`);
+      await logAudit("Reactivated member", `Reactivated profile ${profileId}`, "members");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["members"] });
@@ -168,7 +168,7 @@ export default function Members() {
         redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
-      await logAudit("Password reset", `Sent password reset to ${email}`);
+      await logAudit("Password reset", `Sent password reset to ${email}`, "members");
     },
     onSuccess: () => toast.success("Password reset email sent"),
     onError: (e: Error) => toast.error(e.message),
@@ -191,7 +191,7 @@ export default function Members() {
       // Update timestamp to mark as resent
       const { error } = await supabase.from("invitations").update({ created_at: new Date().toISOString() }).eq("id", inv.id);
       if (error) throw error;
-      await logAudit("Resent invitation", `Resent invitation to ${inv.email}`);
+      await logAudit("Resent invitation", `Resent invitation to ${inv.email}`, "members");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["invitations"] });

@@ -113,11 +113,11 @@ export default function Requisitions() {
       if (editingId) {
         const { error } = await supabase.from("requisitions").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated requisition", form.trade);
+        await logAudit("Updated requisition", form.trade, "requisitions");
       } else {
         const { error } = await supabase.from("requisitions").insert({ ...payload, created_by: user?.id });
         if (error) throw error;
-        await logAudit("Created requisition", `${form.quantity}x ${form.trade}`);
+        await logAudit("Created requisition", `${form.quantity}x ${form.trade}`, "requisitions");
       }
     },
     onSuccess: () => {
@@ -136,7 +136,7 @@ export default function Requisitions() {
       if (notes) update.notes = notes;
       const { error } = await supabase.from("requisitions").update(update).eq("id", id);
       if (error) throw error;
-      await logAudit(`Requisition ${status}`, id);
+      await logAudit(`Requisition ${status}`, id, "requisitions");
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["requisitions"] });
@@ -152,7 +152,7 @@ export default function Requisitions() {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from("requisitions").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted requisition", id);
+      await logAudit("Deleted requisition", id, "requisitions");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["requisitions"] });

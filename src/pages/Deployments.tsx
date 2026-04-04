@@ -108,7 +108,7 @@ export default function Deployments() {
       if (editingId) {
         const { error } = await supabase.from("deployments").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated deployment", editingId);
+        await logAudit("Updated deployment", editingId, "deployments");
       } else {
         const { error } = await supabase.from("deployments").insert(payload);
         if (error) throw error;
@@ -116,7 +116,7 @@ export default function Deployments() {
         if (form.worker_id) {
           await supabase.from("workers").update({ status: "deployed" }).eq("id", form.worker_id);
         }
-        await logAudit("Created deployment", `Rate: ${form.daily_rate}`);
+        await logAudit("Created deployment", `Rate: ${form.daily_rate}`, "deployments");
       }
     },
     onSuccess: () => {
@@ -139,7 +139,7 @@ export default function Deployments() {
       if (row?.status === "active" && row?.worker_id) {
         await supabase.from("workers").update({ status: "available" }).eq("id", row.worker_id);
       }
-      await logAudit("Deleted deployment", id);
+      await logAudit("Deleted deployment", id, "deployments");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["deployments"] });
@@ -159,7 +159,7 @@ export default function Deployments() {
       const workerStatus = newStatus === "active" ? "deployed" : "available";
       await supabase.from("workers").update({ status: workerStatus }).eq("id", row.worker_id);
     }
-    await logAudit("Updated deployment status", newStatus);
+    await logAudit("Updated deployment status", newStatus, "deployments");
     qc.invalidateQueries({ queryKey: ["deployments"] });
     qc.invalidateQueries({ queryKey: ["workers"] });
     if (viewItem?.id === id) setViewItem((prev: any) => ({ ...prev, status: newStatus }));

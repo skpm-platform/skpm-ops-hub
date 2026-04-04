@@ -60,7 +60,7 @@ export default function Timesheets() {
       if (form.end_time) payload.end_time = form.end_time;
       const { error } = await supabase.from("timesheets").insert(payload);
       if (error) throw error;
-      await logAudit("Added timesheet entry", `${form.date}: ${form.hours_worked}h`);
+      await logAudit("Added timesheet entry", `${form.date}: ${form.hours_worked}h`, "timesheets");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["timesheets"] }); setOpen(false); setForm({ date: format(new Date(), "yyyy-MM-dd"), hours_worked: "8", overtime_hours: "0", notes: "", employee_id: "", project_id: "", site_id: "", start_time: "", end_time: "" }); toast.success("Timesheet added"); },
     onError: (e: any) => toast.error(e.message),

@@ -61,7 +61,7 @@ export default function Documents() {
       }
       const { error } = await supabase.from("documents").insert({ name: form.name, category: form.category, file_url: fileUrl, uploaded_by: user.id });
       if (error) throw error;
-      await logAudit("Uploaded document", form.name);
+      await logAudit("Uploaded document", form.name, "documents");
       qc.invalidateQueries({ queryKey: ["documents"] });
       setDialogOpen(false); setForm({ name: "", category: "Reports" }); setFile(null);
       toast.success("Document uploaded");

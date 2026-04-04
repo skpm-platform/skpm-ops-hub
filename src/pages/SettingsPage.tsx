@@ -68,7 +68,7 @@ function CompanySettingsTab() {
         updateSetting.mutateAsync({ key: "company_trn", value: trn.value }),
         updateSetting.mutateAsync({ key: "company_po_box", value: poBox.value }),
       ]);
-      await logAudit("Updated company settings", "settings");
+      await logAudit("Updated company settings", "Company settings updated", "settings");
       toast.success("Company settings saved");
     } catch (err: any) {
       toast.error(err.message || "Failed to save");
@@ -132,7 +132,7 @@ function FinanceSettingsTab() {
         updateSetting.mutateAsync({ key: "bank_iban", value: bankIban.value }),
         updateSetting.mutateAsync({ key: "bank_swift", value: bankSwift.value }),
       ]);
-      await logAudit("Updated finance settings", "settings");
+      await logAudit("Updated finance settings", "Finance settings updated", "settings");
       toast.success("Finance settings saved");
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -233,7 +233,7 @@ function HRSettingsTab() {
         updateSetting.mutateAsync({ key: "auto_clock_out", value: autoClockOut.value }),
         updateSetting.mutateAsync({ key: "require_leave_approval", value: requireLeaveApproval.value }),
       ]);
-      await logAudit("Updated HR settings", "settings");
+      await logAudit("Updated HR settings", "HR settings updated", "settings");
       toast.success("HR settings saved");
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -296,7 +296,7 @@ function OperationsSettingsTab() {
         updateSetting.mutateAsync({ key: "warehouse_min_stock_alert", value: warehouseMinStock.value }),
         updateSetting.mutateAsync({ key: "requisition_approval_chain", value: reqApprovalChain.value }),
       ]);
-      await logAudit("Updated operations settings", "settings");
+      await logAudit("Updated operations settings", "Operations settings updated", "settings");
       toast.success("Operations settings saved");
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -360,7 +360,7 @@ function NotificationSettingsTab() {
         updateSetting.mutateAsync({ key: "notify_maintenance_due", value: maintenanceNotifs.value }),
         updateSetting.mutateAsync({ key: "notification_retention_days", value: retentionDays.value }),
       ]);
-      await logAudit("Updated notification settings", "settings");
+      await logAudit("Updated notification settings", "Notification settings updated", "settings");
       toast.success("Notification settings saved");
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -426,7 +426,7 @@ function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
     if (!isPasswordStrong(newPassword)) { toast.error("Password does not meet strength requirements"); return; }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) toast.error(error.message);
-    else { toast.success("Password updated"); setNewPassword(""); await logAudit("Changed password", "security"); }
+    else { toast.success("Password updated"); setNewPassword(""); await logAudit("Changed password", "User changed their password", "security"); }
   };
 
   const handleSaveSecuritySettings = async () => {
@@ -438,7 +438,7 @@ function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
         updateSetting.mutateAsync({ key: "enforce_strong_password", value: enforceStrongPw.value }),
         updateSetting.mutateAsync({ key: "session_activity_logging", value: sessionLogging.value }),
       ]);
-      await logAudit("Updated security settings", "security");
+      await logAudit("Updated security settings", "Security settings updated", "security");
       toast.success("Security settings saved");
     } catch (err: any) { toast.error(err.message); } finally { setSaving(false); }
   };
@@ -569,14 +569,14 @@ export default function SettingsPage() {
       if (uploadErr) throw uploadErr;
       const { data: urlData } = supabase.storage.from("documents").getPublicUrl(path);
       await updateSetting.mutateAsync({ key: "company_logo_url", value: urlData.publicUrl });
-      logAudit("Updated company logo", "settings");
+      logAudit("Updated company logo", "Company logo updated", "settings");
       toast.success("Company logo updated");
     } catch (err: any) { toast.error(err.message || "Upload failed"); } finally { setLogoUploading(false); }
   };
 
   const handleRemoveLogo = async () => {
     await updateSetting.mutateAsync({ key: "company_logo_url", value: null });
-    logAudit("Removed company logo", "settings");
+    logAudit("Removed company logo", "Company logo removed", "settings");
     toast.success("Logo removed");
   };
 
@@ -628,7 +628,7 @@ export default function SettingsPage() {
       if (!selectedUser) return;
       const { error } = await supabase.rpc("admin_update_user_role", { _target_user_id: selectedUser.user_id, _new_role: selectedRole as "admin" | "manager" | "staff" });
       if (error) throw error;
-      await logAudit("Changed user role", `${selectedUser.name ?? selectedUser.user_id} → ${selectedRole}`);
+      await logAudit("Changed user role", `${selectedUser.name ?? selectedUser.user_id} → ${selectedRole}`, "members");
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["all-user-roles"] }); toast.success("Role updated"); setRoleDialogOpen(false); },
     onError: (e: Error) => toast.error(e.message),

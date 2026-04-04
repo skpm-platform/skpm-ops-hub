@@ -81,7 +81,7 @@ export default function PurchaseOrders() {
       if (editingId) {
         const { error } = await supabase.from("purchase_orders").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated PO", form.vendor);
+        await logAudit("Updated PO", form.vendor, "purchase_orders");
       } else {
         const { error } = await supabase.from("purchase_orders").insert({
           ...payload,
@@ -89,7 +89,7 @@ export default function PurchaseOrders() {
           created_by: user?.id,
         });
         if (error) throw error;
-        await logAudit("Created PO", form.vendor);
+        await logAudit("Created PO", form.vendor, "purchase_orders");
       }
     },
     onSuccess: () => {
@@ -107,7 +107,7 @@ export default function PurchaseOrders() {
       const po = data.find((r: any) => r.id === id);
       const { error } = await supabase.from("purchase_orders").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted PO", po?.po_no || id);
+      await logAudit("Deleted PO", po?.po_no || id, "purchase_orders");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });
@@ -121,7 +121,7 @@ export default function PurchaseOrders() {
     mutationFn: async ({ id, newStatus }: { id: string; newStatus: string }) => {
       const { error } = await supabase.from("purchase_orders").update({ status: newStatus }).eq("id", id);
       if (error) throw error;
-      await logAudit("Advanced PO status", newStatus);
+      await logAudit("Advanced PO status", newStatus, "purchase_orders");
     },
     onSuccess: (_, vars) => {
       qc.invalidateQueries({ queryKey: ["purchase_orders"] });

@@ -59,11 +59,11 @@ export default function MPBilling() {
       if (editingId) {
         const { error } = await (supabase as any).from("mp_billing").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated MP billing", `${total_amount} AED`);
+        await logAudit("Updated MP billing", `${total_amount} AED`, "mp_billing");
       } else {
         const { error } = await supabase.from("mp_billing").insert(payload);
         if (error) throw error;
-        await logAudit("Created MP billing", `${total_amount} AED`);
+        await logAudit("Created MP billing", `${total_amount} AED`, "mp_billing");
       }
     },
     onSuccess: () => {
@@ -80,7 +80,7 @@ export default function MPBilling() {
     mutationFn: async (id: string) => {
       const { error } = await (supabase as any).from("mp_billing").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted MP billing", id);
+      await logAudit("Deleted MP billing", id, "mp_billing");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["mp_billing"] }); toast.success("Deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),
@@ -90,7 +90,7 @@ export default function MPBilling() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await (supabase as any).from("mp_billing").update({ status }).eq("id", id);
       if (error) throw error;
-      await logAudit("Updated MP billing status", `${id} → ${status}`);
+      await logAudit("Updated MP billing status", `${id} → ${status}`, "mp_billing");
     },
     onSuccess: (_, { status }) => {
       qc.invalidateQueries({ queryKey: ["mp_billing"] });

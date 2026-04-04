@@ -42,7 +42,7 @@ export default function CalendarPage() {
     mutationFn: async () => {
       const { error } = await supabase.from("calendar_events").insert({ ...form, end_datetime: form.end_datetime || null, created_by: user?.id });
       if (error) throw error;
-      await logAudit("Added calendar event", form.title);
+      await logAudit("Added calendar event", form.title, "calendar");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["events"] }); toast.success("Event added"); setOpen(false); setForm({ title: "", type: "meeting", start_datetime: "", end_datetime: "", description: "", location: "" }); },
     onError: (e: any) => toast.error(e.message),

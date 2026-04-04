@@ -75,7 +75,7 @@ export default function Attendance() {
       if (toInsert.length === 0) { toast.info("All employees already marked for today"); return; }
       const { error } = await supabase.from("attendance").insert(toInsert);
       if (error) throw error;
-      await logAudit("Mark all present", `${toInsert.length} employees marked for ${today}`);
+      await logAudit("Mark all present", `${toInsert.length} employees marked for ${today}`, "attendance");
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["attendance"] }); queryClient.invalidateQueries({ queryKey: ["attendance-all"] }); toast.success("All active employees marked present for today"); },
     onError: (e: Error) => toast.error(e.message),
@@ -91,7 +91,7 @@ export default function Attendance() {
       const isLate = now.getHours() >= 9;
       const { error } = await supabase.from("attendance").insert({ user_id: user.id, clock_in: now.toISOString(), date: format(now, "yyyy-MM-dd"), status: isLate ? "late" : "present" });
       if (error) throw error;
-      await logAudit("Clocked in", `At ${format(now, "HH:mm")}`);
+      await logAudit("Clocked in", `At ${format(now, "HH:mm")}`, "attendance");
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["attendance"] }); toast.success(`Clocked in at ${format(new Date(), "HH:mm")}`); },
     onError: (e: Error) => toast.error(e.message),
@@ -104,7 +104,7 @@ export default function Attendance() {
       const mins = differenceInMinutes(now, new Date(todayRecord.clock_in));
       const { error } = await supabase.from("attendance").update({ clock_out: now.toISOString(), notes: `Total: ${Math.floor(mins / 60)}h ${mins % 60}m` }).eq("id", todayRecord.id);
       if (error) throw error;
-      await logAudit("Clocked out", `At ${format(now, "HH:mm")} — ${Math.floor(mins / 60)}h ${mins % 60}m`);
+      await logAudit("Clocked out", `At ${format(now, "HH:mm")} — ${Math.floor(mins / 60)}h ${mins % 60}m`, "attendance");
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["attendance"] }); toast.success(`Clocked out at ${format(new Date(), "HH:mm")}`); },
     onError: (e: Error) => toast.error(e.message),
@@ -115,7 +115,7 @@ export default function Attendance() {
       if (!editRecord) return;
       const { error } = await supabase.from("attendance").update({ status: editForm.status, notes: editForm.notes, clock_in: editForm.clock_in || null, clock_out: editForm.clock_out || null }).eq("id", editRecord.id);
       if (error) throw error;
-      await logAudit("Admin edited attendance", `Record ${editRecord.id}`);
+      await logAudit("Admin edited attendance", `Record ${editRecord.id}`, "attendance");
     },
     onSuccess: () => { queryClient.invalidateQueries({ queryKey: ["attendance"] }); queryClient.invalidateQueries({ queryKey: ["attendance-all"] }); toast.success("Record updated"); setEditOpen(false); },
     onError: (e: Error) => toast.error(e.message),

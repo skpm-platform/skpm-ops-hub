@@ -55,7 +55,7 @@ export default function GatePasses() {
       if (form.site_id) payload.site_id = form.site_id;
       const { error } = await (supabase as any).from("gate_passes").insert(payload);
       if (error) throw error;
-      await logAudit("Issued gate pass", form.pass_no);
+      await logAudit("Issued gate pass", form.pass_no, "gate_passes");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["gate_passes"] }); setOpen(false); setForm({ pass_no: "", pass_type: "entry", valid_from: "", valid_until: "", notes: "", worker_id: "", site_id: "" }); toast.success("Gate pass issued"); },
     onError: (e: any) => toast.error(e.message),

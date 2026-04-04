@@ -57,11 +57,11 @@ export default function Clients() {
       if (editingId) {
         const { error } = await supabase.from("clients").update(form).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated client", form.name);
+        await logAudit("Updated client", form.name, "clients");
       } else {
         const { error } = await supabase.from("clients").insert(form);
         if (error) throw error;
-        await logAudit("Created client", form.name);
+        await logAudit("Created client", form.name, "clients");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["clients"] }); toast.success(editingId ? "Client updated" : "Client added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -73,7 +73,7 @@ export default function Clients() {
       const client = data.find((c: any) => c.id === id);
       const { error } = await supabase.from("clients").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted client", client?.name);
+      await logAudit("Deleted client", client?.name, "clients");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["clients"] }); toast.success("Client deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),

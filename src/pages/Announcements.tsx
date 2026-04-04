@@ -54,11 +54,11 @@ export default function Announcements() {
       if (editingId) {
         const { error } = await supabase.from("announcements").update({ title: form.title, message: form.message, priority: form.priority, target_audience: form.target_audience, pinned: form.pinned, expiry_date: form.expiry_date || null }).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated announcement", form.title);
+        await logAudit("Updated announcement", form.title, "announcements");
       } else {
         const { error } = await supabase.from("announcements").insert(payload);
         if (error) throw error;
-        await logAudit("Posted announcement", form.title);
+        await logAudit("Posted announcement", form.title, "announcements");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["announcements"] }); toast.success(editingId ? "Announcement updated" : "Announcement posted"); setOpen(false); setEditingId(null); setForm(emptyForm); },

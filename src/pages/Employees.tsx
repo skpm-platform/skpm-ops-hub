@@ -70,11 +70,11 @@ export default function Employees() {
       if (editingId) {
         const { error } = await supabase.from("employees").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated employee", form.name);
+        await logAudit("Updated employee", form.name, "employees");
       } else {
         const { error } = await supabase.from("employees").insert({ ...payload, employee_id: `EMP-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
-        await logAudit("Added employee", form.name);
+        await logAudit("Added employee", form.name, "employees");
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success(editingId ? "Employee updated" : "Employee added"); setOpen(false); setEditingId(null); setForm(emptyForm); },
@@ -86,7 +86,7 @@ export default function Employees() {
       const emp = data.find((e: any) => e.id === id);
       const { error } = await supabase.from("employees").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted employee", emp?.name);
+      await logAudit("Deleted employee", emp?.name, "employees");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["employees"] }); toast.success("Employee deleted"); setDeleteId(null); },
     onError: (e: any) => toast.error(e.message),

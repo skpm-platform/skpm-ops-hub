@@ -49,7 +49,7 @@ export default function DutyRoster() {
       if (form.employee_id) payload.employee_id = form.employee_id;
       const { error } = await supabase.from("duty_roster").insert(payload);
       if (error) throw error;
-      await logAudit("Added roster entry", form.date);
+      await logAudit("Added roster entry", form.date, "duty_roster");
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["duty_roster"] }); setOpen(false); setForm({ date: "", shift: "day", start_time: "08:00", end_time: "17:00", notes: "", employee_id: "" }); toast.success("Roster entry added"); },
     onError: (e: any) => toast.error(e.message),

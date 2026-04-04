@@ -162,14 +162,14 @@ export default function Manpower() {
       if (editingId) {
         const { error } = await supabase.from("workers").update(payload).eq("id", editingId);
         if (error) throw error;
-        await logAudit("Updated worker", form.name);
+        await logAudit("Updated worker", form.name, "manpower");
       } else {
         const { error } = await supabase.from("workers").insert({
           ...payload,
           worker_id: `WKR-${Date.now().toString().slice(-6)}`,
         });
         if (error) throw error;
-        await logAudit("Added worker", form.name);
+        await logAudit("Added worker", form.name, "manpower");
       }
     },
     onSuccess: () => {
@@ -187,7 +187,7 @@ export default function Manpower() {
       const worker = workers.find((w: any) => w.id === id);
       const { error } = await supabase.from("workers").delete().eq("id", id);
       if (error) throw error;
-      await logAudit("Deleted worker", worker?.name || id);
+      await logAudit("Deleted worker", worker?.name || id, "manpower");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workers"] });
@@ -201,7 +201,7 @@ export default function Manpower() {
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
       const { error } = await supabase.from("workers").update({ status }).eq("id", id);
       if (error) throw error;
-      await logAudit("Updated worker status", status);
+      await logAudit("Updated worker status", status, "manpower");
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["workers"] });
@@ -259,7 +259,7 @@ export default function Manpower() {
       const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").update({ status }).in("id", ids);
       if (error) throw error;
-      await logAudit("Bulk status update", `${ids.length} workers → ${status}`);
+      await logAudit("Bulk status update", `${ids.length} workers → ${status}`, "manpower");
       qc.invalidateQueries({ queryKey: ["workers"] });
       clearSelection();
       toast.success(`${ids.length} workers updated to ${status}`);
@@ -273,7 +273,7 @@ export default function Manpower() {
       const ids = Array.from(selected) as string[];
       const { error } = await supabase.from("workers").delete().in("id", ids);
       if (error) throw error;
-      await logAudit("Bulk deleted workers", `${ids.length} workers`);
+      await logAudit("Bulk deleted workers", `${ids.length} workers`, "manpower");
       qc.invalidateQueries({ queryKey: ["workers"] });
       clearSelection();
       setBulkDeleteOpen(false);
