@@ -237,7 +237,7 @@ export default function Attendance() {
               <div><p className="text-xs text-muted-foreground uppercase tracking-wider">Today's Attendance</p>
                 <p className="text-lg font-bold"><span className="text-success">{todayPresentCount}</span> / {allActiveEmployees.length} employees present</p>
               </div>
-              {todayAbsentCount > 0 && <Badge variant="secondary" className="border-0 bg-destructive/10 text-destructive">{todayAbsentCount} absent</Badge>}
+              {todayAbsentCount > 0 && <Badge variant="secondary" className="border-0 bg-destructive/10 text-destructive">{todayAbsentCount} not checked in</Badge>}
             </CardContent>
           </Card>
         );

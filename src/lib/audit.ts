@@ -14,7 +14,7 @@ export async function logAudit(action: string, details?: string, module?: string
       user_id: user.id,
       action: safeAction,
       details: safeDetails,
-      module: safeModule || undefined,
+      module: safeModule || "general",
     });
   } catch {
     // Silently fail - audit logging should not break the app
