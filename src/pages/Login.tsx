@@ -4,11 +4,55 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Lock, Mail, ArrowRight, Shield, Zap, BarChart3, Globe, CheckCircle2, TrendingUp, Users, Building2 } from "lucide-react";
+import {
+  Loader2, Lock, Mail, ArrowRight, Shield,
+  Zap, BarChart3, Users, Building2, TrendingUp,
+  CheckCircle2, Globe, Sparkles, ChevronRight
+} from "lucide-react";
 import { toast } from "sonner";
 import skpmLogo from "@/assets/skpm-logo.png";
 import { useSystemSetting } from "@/hooks/use-system-settings";
 import { loginSchema } from "@/lib/validations";
+
+/* ── Floating decorative card (mimics a mini dashboard widget) ── */
+function FloatingCard({
+  className,
+  children,
+  style,
+}: {
+  className?: string;
+  children: React.ReactNode;
+  style?: React.CSSProperties;
+}) {
+  return (
+    <div
+      className={`absolute rounded-2xl border border-white/[0.09] bg-white/[0.05] backdrop-blur-md p-3.5 shadow-xl ${className}`}
+      style={style}
+    >
+      {children}
+    </div>
+  );
+}
+
+/* ── Stat pill used in FloatingCards ── */
+function StatPill({ icon: Icon, value, label, color }: {
+  icon: React.ComponentType<any>;
+  value: string;
+  label: string;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`h-8 w-8 rounded-xl flex items-center justify-center shrink-0 ${color}`}>
+        <Icon className="h-4 w-4" />
+      </div>
+      <div>
+        <p className="text-[15px] font-bold text-white leading-none">{value}</p>
+        <p className="text-[10px] text-white/45 mt-0.5 font-medium">{label}</p>
+      </div>
+    </div>
+  );
+}
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -16,7 +60,6 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState<"login" | "forgot">("login");
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [lockoutSeconds, setLockoutSeconds] = useState(0);
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const logoSrc = companyLogoUrl || skpmLogo;
 
@@ -25,7 +68,6 @@ export default function Login() {
     setErrors({});
     const rateCheck = checkLoginRateLimit();
     if (!rateCheck.allowed) {
-      setLockoutSeconds(rateCheck.remainingSeconds);
       toast.error(`Too many attempts. Try again in ${rateCheck.remainingSeconds}s`);
       return;
     }
@@ -39,7 +81,10 @@ export default function Login() {
       return;
     }
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email: result.data.email, password: result.data.password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: result.data.email,
+      password: result.data.password,
+    });
     if (error) {
       recordLoginAttempt(false);
       const remaining = getRemainingAttempts();
@@ -68,313 +113,381 @@ export default function Login() {
     });
     if (error) {
       recordLoginAttempt(false);
-      const remaining = getRemainingAttempts();
-      if (remaining > 0 && remaining <= 3) {
-        toast.error(`${error.message}. ${remaining} attempts remaining.`);
-      } else {
-        toast.error(error.message);
-      }
+      toast.error(error.message);
     } else {
       recordLoginAttempt(true);
-      toast.success("Check your email for a password reset link!");
+      toast.success("Reset link sent — check your email!");
     }
     setLoading(false);
   };
 
-  const stats = [
-    { icon: Users, value: "500+", label: "Active Users" },
-    { icon: Building2, value: "12", label: "Project Sites" },
-    { icon: TrendingUp, value: "99.9%", label: "Uptime SLA" },
-  ];
-
   const features = [
-    { icon: Zap, label: "Real-time Operations Dashboard", color: "text-amber-400" },
-    { icon: Shield, label: "Enterprise-grade Security", color: "text-emerald-400" },
-    { icon: BarChart3, label: "Smart Analytics & Reporting", color: "text-indigo-400" },
+    { icon: Zap,      label: "Real-time Operations",    color: "bg-amber-400/20 text-amber-300" },
+    { icon: Shield,   label: "Enterprise Security",      color: "bg-emerald-400/20 text-emerald-300" },
+    { icon: BarChart3,label: "Smart Analytics",          color: "bg-violet-400/20 text-violet-300" },
+    { icon: Users,    label: "HR & Workforce",           color: "bg-blue-400/20 text-blue-300" },
   ];
 
   return (
-    <div className="min-h-screen flex flex-col lg:flex-row bg-[#030712]">
-      {/* ═══════════════════════════════════════════════
-          LEFT PANEL — Immersive Brand Showcase
-          ═══════════════════════════════════════════════ */}
-      <div className="hidden lg:flex lg:w-[52%] xl:w-[55%] relative overflow-hidden">
+    <div className="min-h-screen flex flex-col lg:flex-row overflow-hidden" style={{ background: "#050610" }}>
 
-        {/* Multi-layer dark background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-[#0c0e1a] via-[#0d0f20] to-[#060814]" />
+      {/* ══════════════════════════════════════════════════
+          LEFT — Immersive Brand Panel
+          ══════════════════════════════════════════════════ */}
+      <div className="hidden lg:flex lg:w-[54%] xl:w-[56%] relative overflow-hidden flex-col">
 
-        {/* Aurora glow orbs */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div
-            className="absolute -top-32 -left-32 w-[600px] h-[600px] rounded-full animate-aurora"
-            style={{ background: "radial-gradient(circle, rgba(99,102,241,0.18) 0%, transparent 70%)" }}
-          />
-          <div
-            className="absolute -bottom-24 right-[-10%] w-[500px] h-[500px] rounded-full animate-aurora"
-            style={{ background: "radial-gradient(circle, rgba(139,92,246,0.14) 0%, transparent 70%)", animationDelay: "3s" }}
-          />
-          <div
-            className="absolute top-1/2 left-1/3 w-[350px] h-[350px] rounded-full animate-aurora"
-            style={{ background: "radial-gradient(circle, rgba(79,70,229,0.10) 0%, transparent 70%)", animationDelay: "5s" }}
-          />
-          <div
-            className="absolute top-1/4 right-1/4 w-[200px] h-[200px] rounded-full animate-pulse-soft"
-            style={{ background: "radial-gradient(circle, rgba(16,185,129,0.08) 0%, transparent 70%)", animationDelay: "2s" }}
-          />
-        </div>
-
-        {/* Fine grid pattern */}
-        <div
-          className="absolute inset-0 opacity-[0.04]"
+        {/* ── Background layers ── */}
+        <div className="absolute inset-0"
           style={{
-            backgroundImage: "linear-gradient(rgba(255,255,255,0.4) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.4) 1px, transparent 1px)",
-            backgroundSize: "60px 60px"
+            background: "linear-gradient(135deg, #0c0618 0%, #0a0520 35%, #080416 70%, #050310 100%)"
           }}
         />
 
-        {/* Animated morphing blobs */}
-        <div
-          className="absolute top-20 right-16 w-44 h-44 bg-indigo-500/[0.07] animate-morph"
-          style={{ filter: "blur(2px)" }}
-        />
-        <div
-          className="absolute bottom-32 left-8 w-28 h-28 bg-violet-500/[0.06] animate-morph"
-          style={{ filter: "blur(1px)", animationDelay: "4s" }}
-        />
-
-        {/* Floating geometric accents */}
-        <div className="absolute top-28 right-28 w-20 h-20 border border-white/[0.06] rounded-2xl rotate-12 animate-float" style={{ animationDuration: "7s" }} />
-        <div className="absolute bottom-40 left-20 w-14 h-14 border border-indigo-400/[0.08] rounded-xl -rotate-6 animate-float" style={{ animationDuration: "9s", animationDelay: "2s" }} />
-        <div className="absolute top-1/2 right-12 w-5 h-5 bg-violet-400/10 rounded rotate-45 animate-bounce-soft" />
-        <div className="absolute top-1/3 left-1/3 w-2.5 h-2.5 bg-indigo-400/20 rounded-full animate-pulse-soft" style={{ animationDelay: "1.5s" }} />
-
-        {/* Vertical accent lines */}
-        <div className="absolute inset-0 overflow-hidden opacity-[0.03]">
-          <div className="absolute top-0 left-[30%] w-px h-full bg-gradient-to-b from-transparent via-white to-transparent" />
-          <div className="absolute top-0 left-[65%] w-px h-full bg-gradient-to-b from-transparent via-white to-transparent" />
+        {/* Aurora orbs */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute -top-40 -left-40 w-[700px] h-[700px] rounded-full animate-aurora"
+            style={{ background: "radial-gradient(circle at 40% 40%, rgba(124,58,237,0.2) 0%, transparent 65%)" }} />
+          <div className="absolute -bottom-32 right-[-15%] w-[600px] h-[600px] rounded-full animate-aurora"
+            style={{ background: "radial-gradient(circle at 50% 50%, rgba(167,139,250,0.12) 0%, transparent 65%)", animationDelay: "3.5s" }} />
+          <div className="absolute top-[40%] left-[20%] w-[400px] h-[400px] rounded-full animate-aurora"
+            style={{ background: "radial-gradient(circle at 50% 50%, rgba(99,102,241,0.1) 0%, transparent 65%)", animationDelay: "6s" }} />
+          <div className="absolute top-[15%] right-[15%] w-[220px] h-[220px] rounded-full animate-pulse-soft"
+            style={{ background: "radial-gradient(circle, rgba(16,185,129,0.07) 0%, transparent 65%)", animationDelay: "1.5s" }} />
         </div>
 
-        {/* Content */}
-        <div className="relative z-10 flex flex-col w-full px-12 xl:px-16 py-10 justify-between">
+        {/* Grid pattern */}
+        <div className="absolute inset-0 opacity-[0.035]"
+          style={{
+            backgroundImage: "linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)",
+            backgroundSize: "52px 52px"
+          }}
+        />
 
-          {/* Logo + Brand + Live indicator */}
+        {/* Morphing blob accents */}
+        <div className="absolute top-24 right-20 w-48 h-48 bg-violet-600/[0.07] animate-morph" style={{ filter: "blur(4px)" }} />
+        <div className="absolute bottom-36 left-12 w-32 h-32 bg-purple-500/[0.06] animate-morph" style={{ filter: "blur(3px)", animationDelay: "5s" }} />
+
+        {/* Geometric accents */}
+        <div className="absolute top-32 right-36 w-24 h-24 border border-white/[0.05] rounded-3xl rotate-12 animate-float-slow" style={{ animationDuration: "8s" }} />
+        <div className="absolute bottom-44 left-24 w-16 h-16 border border-violet-400/[0.08] rounded-2xl -rotate-6 animate-float-slow" style={{ animationDuration: "10s", animationDelay: "2s" }} />
+
+        {/* Twinkling stars */}
+        {[
+          { top: "18%", left: "25%", delay: "0s" },
+          { top: "35%", left: "72%", delay: "1.2s" },
+          { top: "62%", left: "18%", delay: "0.6s" },
+          { top: "78%", left: "58%", delay: "2s" },
+          { top: "12%", left: "60%", delay: "0.9s" },
+          { top: "48%", left: "88%", delay: "1.7s" },
+        ].map((s, i) => (
+          <div key={i}
+            className="absolute w-1 h-1 rounded-full bg-white/30 animate-twinkle"
+            style={{ top: s.top, left: s.left, animationDelay: s.delay }}
+          />
+        ))}
+
+        {/* ── Floating UI preview cards ── */}
+        {/* Top-right: Revenue card */}
+        <FloatingCard
+          className="top-[14%] right-[8%] w-52 animate-float"
+          style={{ animationDuration: "6s", animationDelay: "0.5s" }}
+        >
+          <div className="flex items-center justify-between mb-2.5">
+            <span className="text-[10px] font-bold text-white/40 uppercase tracking-widest">Revenue</span>
+            <span className="text-[9px] bg-emerald-400/15 text-emerald-400 px-2 py-0.5 rounded-full font-bold">+14.2%</span>
+          </div>
+          <p className="text-2xl font-black text-white tracking-tight">AED 2.4M</p>
+          <div className="mt-2.5 flex gap-1 items-end h-8">
+            {[35, 58, 42, 72, 55, 88, 65, 94, 71, 82].map((h, i) => (
+              <div key={i} className="flex-1 rounded-sm"
+                style={{
+                  height: `${h}%`,
+                  background: `rgba(167,139,250,${0.2 + (i / 10) * 0.5})`
+                }}
+              />
+            ))}
+          </div>
+        </FloatingCard>
+
+        {/* Bottom-right: Employees */}
+        <FloatingCard
+          className="bottom-[22%] right-[6%] w-44 animate-float-slow"
+          style={{ animationDuration: "7s", animationDelay: "2s" }}
+        >
+          <StatPill icon={Users} value="487" label="Active Employees" color="bg-blue-500/20 text-blue-400" />
+          <div className="mt-2.5 h-px bg-white/[0.06]" />
+          <div className="mt-2.5">
+            <StatPill icon={Building2} value="12" label="Project Sites" color="bg-violet-500/20 text-violet-400" />
+          </div>
+        </FloatingCard>
+
+        {/* Mid-left: Tasks card */}
+        <FloatingCard
+          className="top-[46%] left-[5%] w-48 animate-float"
+          style={{ animationDuration: "8s", animationDelay: "1s" }}
+        >
+          <div className="flex items-center gap-2 mb-2.5">
+            <div className="h-6 w-6 rounded-lg bg-amber-400/20 flex items-center justify-center">
+              <Zap className="h-3.5 w-3.5 text-amber-400" />
+            </div>
+            <span className="text-[11px] font-bold text-white/60">Tasks Today</span>
+          </div>
+          <div className="space-y-1.5">
+            {[
+              { label: "Completed", w: "68%", color: "bg-emerald-400/40" },
+              { label: "In Progress", w: "45%", color: "bg-violet-400/40" },
+              { label: "Pending",    w: "25%", color: "bg-amber-400/40"  },
+            ].map(t => (
+              <div key={t.label}>
+                <div className="flex justify-between mb-0.5">
+                  <span className="text-[9px] text-white/35 font-medium">{t.label}</span>
+                </div>
+                <div className="h-1.5 bg-white/[0.06] rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${t.color}`} style={{ width: t.w }} />
+                </div>
+              </div>
+            ))}
+          </div>
+        </FloatingCard>
+
+        {/* ── Main content ── */}
+        <div className="relative z-10 flex flex-col h-full px-12 xl:px-16 py-10 justify-between">
+
+          {/* Logo */}
           <div className="flex items-center gap-3.5 animate-fade-in">
-            <div className="h-11 w-11 rounded-2xl bg-white/[0.07] backdrop-blur-xl border border-white/[0.08] flex items-center justify-center p-2 shadow-xl shadow-black/30">
+            <div className="h-11 w-11 rounded-2xl bg-white/[0.06] backdrop-blur-xl border border-white/[0.08] flex items-center justify-center p-2 shadow-2xl shadow-black/40">
               <img src={logoSrc} alt="SKPM" className="h-full w-full object-contain" />
             </div>
             <div>
               <h1 className="text-[15px] font-bold text-white/90 tracking-tight leading-none">SKPM Technical Service</h1>
-              <p className="text-[11px] text-white/30 font-medium mt-0.5 leading-none">Operations Management Platform</p>
+              <p className="text-[11px] text-white/30 font-medium mt-0.5">Operations Management Platform</p>
             </div>
-            <div className="ml-auto flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1">
+            <div className="ml-auto flex items-center gap-1.5 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-3 py-1 shrink-0">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="text-[10px] text-emerald-400 font-bold tracking-wide">LIVE</span>
+              <span className="text-[10px] text-emerald-400 font-bold tracking-wider">LIVE</span>
             </div>
           </div>
 
-          {/* Hero Content */}
-          <div className="flex-1 flex flex-col justify-center py-12">
+          {/* Hero */}
+          <div className="flex-1 flex flex-col justify-center py-10">
+
             {/* Badge */}
-            <div className="inline-flex items-center gap-2 w-fit bg-indigo-500/10 border border-indigo-400/20 rounded-full px-4 py-1.5 mb-8 animate-fade-in stagger-1">
-              <CheckCircle2 className="h-3.5 w-3.5 text-indigo-400" />
-              <span className="text-[11px] text-indigo-300/80 font-semibold tracking-widest uppercase">Enterprise Operations Platform</span>
+            <div className="inline-flex items-center gap-2 w-fit mb-8 animate-fade-in stagger-1">
+              <div className="flex items-center gap-2 bg-violet-500/10 border border-violet-500/20 rounded-full px-4 py-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-violet-400" />
+                <span className="text-[11px] text-violet-300/80 font-bold tracking-widest uppercase">
+                  Enterprise Operations Platform
+                </span>
+              </div>
             </div>
 
-            {/* Main headline */}
-            <div className="space-y-2 mb-8 animate-fade-in stagger-2">
-              <h2 className="text-[2.8rem] xl:text-[3.4rem] font-black text-white leading-[1.05] tracking-[-0.04em]">
-                One platform.
+            {/* Headline */}
+            <div className="space-y-1 mb-6 animate-fade-in stagger-2">
+              <h2 className="text-[3.2rem] xl:text-[3.8rem] font-black text-white leading-[1.0] tracking-[-0.045em]">
+                Manage more.
               </h2>
-              <h2 className="text-[2.8rem] xl:text-[3.4rem] font-black leading-[1.05] tracking-[-0.04em]">
+              <h2 className="text-[3.2rem] xl:text-[3.8rem] font-black leading-[1.0] tracking-[-0.045em]">
                 <span
                   className="animate-gradient"
                   style={{
-                    background: "linear-gradient(90deg, #818cf8, #a78bfa, #60a5fa, #818cf8)",
+                    background: "linear-gradient(90deg, #a78bfa, #c084fc, #818cf8, #a78bfa)",
                     backgroundSize: "200% auto",
                     WebkitBackgroundClip: "text",
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",
                   }}
                 >
-                  Total control.
+                  Work smarter.
                 </span>
               </h2>
             </div>
 
-            <p className="text-[15px] text-slate-400/75 max-w-md leading-[1.75] mb-10 animate-fade-in stagger-3">
-              Manage projects, HR, finance, facilities, and compliance — all in one unified digital workspace built for the UAE's leading enterprises.
+            <p className="text-[15px] text-slate-400/70 max-w-[420px] leading-[1.8] mb-10 animate-fade-in stagger-3">
+              The all-in-one digital workspace for UAE enterprises — projects, HR, finance, facilities and compliance in one unified platform.
             </p>
 
-            {/* Stats row */}
-            <div className="flex gap-8 mb-12 animate-fade-in stagger-4">
-              {stats.map((stat) => (
-                <div key={stat.label} className="flex flex-col gap-1">
-                  <div className="flex items-center gap-1.5">
-                    <stat.icon className="h-3.5 w-3.5 text-indigo-400/70" />
-                    <span className="text-[22px] font-black text-white tracking-tight">{stat.value}</span>
-                  </div>
-                  <span className="text-[11px] text-slate-500 font-medium">{stat.label}</span>
-                </div>
-              ))}
-            </div>
-
-            {/* Feature list */}
-            <div className="flex flex-col gap-2.5 animate-fade-in stagger-5">
-              {features.map((feat) => (
-                <div
-                  key={feat.label}
-                  className="flex items-center gap-3 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.06] rounded-xl px-4 py-2.5 transition-all duration-300 group w-fit"
+            {/* Feature grid */}
+            <div className="grid grid-cols-2 gap-2.5 max-w-[420px] animate-fade-in stagger-4">
+              {features.map((f) => (
+                <div key={f.label}
+                  className="flex items-center gap-2.5 bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.05] rounded-xl px-3.5 py-2.5 transition-all duration-300 group cursor-default"
                 >
-                  <feat.icon className={`h-4 w-4 ${feat.color} group-hover:scale-110 transition-transform duration-200`} />
-                  <span className="text-[13px] text-slate-300/80 font-medium">{feat.label}</span>
-                  <div className="ml-2 h-1.5 w-1.5 rounded-full bg-white/10 group-hover:bg-indigo-400/40 transition-colors duration-200" />
+                  <div className={`h-7 w-7 rounded-xl flex items-center justify-center shrink-0 ${f.color}`}>
+                    <f.icon className="h-3.5 w-3.5" />
+                  </div>
+                  <span className="text-[12px] text-slate-300/75 font-medium">{f.label}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          {/* Bottom */}
+          {/* Footer */}
           <div className="flex items-center gap-2 text-slate-600 text-[11px] animate-fade-in stagger-6">
             <Globe className="h-3 w-3" />
-            <span>Trusted across UAE · Secure · Enterprise-grade</span>
+            <span>Trusted across UAE · ISO-certified · Enterprise-grade</span>
           </div>
         </div>
       </div>
 
-      {/* ═══════════════════════════════════════════════
-          RIGHT PANEL — Login Form
-          ═══════════════════════════════════════════════ */}
-      <div className="flex-1 flex items-center justify-center p-6 sm:p-8 lg:p-12 relative bg-[#060814] lg:bg-background">
-        {/* Background elements */}
-        <div className="absolute inset-0 bg-gradient-to-br from-background via-background to-primary/[0.025]" />
-        <div className="absolute top-0 right-0 w-96 h-96 bg-primary/[0.04] rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none" />
-        <div className="absolute bottom-0 left-0 w-64 h-64 bg-violet-500/[0.03] rounded-full blur-3xl translate-y-1/2 -translate-x-1/2 pointer-events-none" />
+      {/* ══════════════════════════════════════════════════
+          RIGHT — Login Form Panel
+          ══════════════════════════════════════════════════ */}
+      <div className="flex-1 relative flex items-center justify-center p-6 sm:p-10 lg:p-14"
+        style={{ background: "hsl(250 30% 98%)" }}
+      >
+        {/* Subtle bg glow */}
+        <div className="absolute inset-0 overflow-hidden pointer-events-none">
+          <div className="absolute top-0 right-0 w-80 h-80 rounded-full opacity-30 -translate-y-1/2 translate-x-1/2"
+            style={{ background: "radial-gradient(circle, hsl(263 70% 58% / 0.08) 0%, transparent 70%)" }} />
+          <div className="absolute bottom-0 left-0 w-60 h-60 rounded-full opacity-20 translate-y-1/2 -translate-x-1/2"
+            style={{ background: "radial-gradient(circle, hsl(290 70% 60% / 0.07) 0%, transparent 70%)" }} />
+        </div>
 
-        <div className="relative w-full max-w-[400px] space-y-6 animate-fade-in">
+        <div className="relative w-full max-w-[420px] animate-fade-in-scale">
 
-          {/* Mobile Logo */}
-          <div className="flex flex-col items-center lg:hidden mb-8">
-            <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-primary/20 to-violet-500/10 border border-primary/20 flex items-center justify-center p-2.5 mb-4 shadow-lg shadow-primary/15">
-              <img src={logoSrc} alt="SKPM Logo" className="h-full w-full object-contain" />
+          {/* Mobile logo */}
+          <div className="flex flex-col items-center lg:hidden mb-10">
+            <div className="h-16 w-16 rounded-3xl border border-violet-200 bg-violet-50 flex items-center justify-center p-3 mb-4 shadow-lg shadow-violet-200/50">
+              <img src={logoSrc} alt="SKPM" className="h-full w-full object-contain" />
             </div>
-            <h1 className="text-xl font-bold text-white tracking-tight">SKPM Technical Service</h1>
-            <p className="text-sm text-slate-400 mt-1">Operations Management Platform</p>
+            <h1 className="text-xl font-bold text-slate-900">SKPM Technical Service</h1>
+            <p className="text-sm text-slate-500 mt-1">Operations Management Platform</p>
           </div>
 
-          {/* Form Card */}
+          {/* Header text */}
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-3">
+              <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-600/30">
+                <img src={logoSrc} alt="" className="h-5 w-5 object-contain brightness-0 invert" />
+              </div>
+              <span className="text-[13px] font-bold text-violet-600 tracking-tight">SKPM Ops Hub</span>
+            </div>
+            <h2 className="text-[2rem] font-black text-slate-900 tracking-tight leading-tight" style={{ letterSpacing: "-0.03em" }}>
+              {mode === "login" ? "Welcome back" : "Forgot password?"}
+            </h2>
+            <p className="text-[14px] text-slate-500 mt-2 leading-relaxed">
+              {mode === "login"
+                ? "Sign in to your workspace to continue"
+                : "We'll email you a link to reset your password"}
+            </p>
+          </div>
+
+          {/* Card */}
           <div className="relative">
-            {/* Glow ring behind card */}
-            <div className="absolute -inset-px rounded-2xl bg-gradient-to-br from-indigo-500/20 via-violet-500/10 to-transparent blur-sm" />
+            {/* Outer glow */}
+            <div className="absolute -inset-[1px] rounded-2xl bg-gradient-to-br from-violet-500/20 via-purple-500/10 to-transparent blur-[2px] pointer-events-none" />
 
-            <div className="relative bg-white dark:bg-card rounded-2xl border border-border/50 dark:border-white/[0.06] overflow-hidden shadow-2xl shadow-black/20">
-              {/* Top accent gradient bar */}
-              <div className="h-[3px] w-full bg-gradient-to-r from-indigo-500 via-violet-500 to-purple-500" />
+            <div className="relative bg-white rounded-2xl shadow-[0_2px_8px_-2px_rgba(0,0,0,0.08),0_16px_40px_-8px_rgba(0,0,0,0.1)] overflow-hidden border border-slate-100/80">
 
-              <div className="px-7 sm:px-8 pt-8 pb-7">
-                {/* Card header */}
-                <div className="mb-7">
-                  <h2 className="text-[1.55rem] font-bold tracking-tight text-foreground leading-tight">
-                    {mode === "login" ? "Welcome back" : "Reset password"}
-                  </h2>
-                  <p className="text-[13.5px] text-muted-foreground mt-1.5">
-                    {mode === "login"
-                      ? "Enter your credentials to access the platform"
-                      : "We'll send a reset link to your email address"}
-                  </p>
-                </div>
+              {/* Top accent */}
+              <div className="h-[3px] w-full"
+                style={{ background: "linear-gradient(90deg, #7c3aed, #a855f7, #6366f1)" }}
+              />
 
-                {/* Form */}
-                <form onSubmit={mode === "login" ? handleLogin : handleForgotPassword} className="space-y-4">
+              <div className="p-7 sm:p-8">
+                <form onSubmit={mode === "login" ? handleLogin : handleForgotPassword} className="space-y-5">
+
                   {/* Email */}
-                  <div className="space-y-1.5">
-                    <Label htmlFor="email" className="text-[12.5px] font-semibold text-foreground/70">
+                  <div className="space-y-2">
+                    <Label htmlFor="email" className="text-[12.5px] font-semibold text-slate-600">
                       Email address
                     </Label>
                     <div className="relative group">
-                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary/60 transition-colors duration-200" />
+                      <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-violet-500 transition-colors duration-200" />
                       <Input
                         id="email"
                         type="email"
-                        placeholder="you@skpm.ae"
+                        placeholder="you@company.ae"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
-                        className="pl-11 h-11 text-sm bg-muted/40 dark:bg-white/[0.04] border-border/50 hover:border-border focus:border-primary/50 focus:bg-background rounded-xl transition-all duration-200"
+                        className="pl-11 h-11 text-sm border-slate-200 hover:border-slate-300 focus:border-violet-400 bg-slate-50/50 focus:bg-white rounded-xl transition-all duration-200 placeholder:text-slate-400/70 text-slate-900"
                       />
                     </div>
                     {errors.email && (
-                      <p className="text-xs text-destructive font-medium animate-slide-down">{errors.email}</p>
+                      <p className="text-xs text-red-500 font-medium animate-slide-down flex items-center gap-1.5">
+                        <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                        {errors.email}
+                      </p>
                     )}
                   </div>
 
                   {/* Password */}
                   {mode === "login" && (
-                    <div className="space-y-1.5">
+                    <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="password" className="text-[12.5px] font-semibold text-foreground/70">
+                        <Label htmlFor="password" className="text-[12.5px] font-semibold text-slate-600">
                           Password
                         </Label>
                         <button
                           type="button"
                           onClick={() => { setMode("forgot"); setErrors({}); }}
-                          className="text-[12px] text-primary/70 hover:text-primary font-semibold transition-colors hover:underline underline-offset-2"
+                          className="text-[12px] text-violet-600 hover:text-violet-700 font-semibold transition-colors hover:underline underline-offset-2"
                         >
                           Forgot password?
                         </button>
                       </div>
                       <div className="relative group">
-                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground/40 group-focus-within:text-primary/60 transition-colors duration-200" />
+                        <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 group-focus-within:text-violet-500 transition-colors duration-200" />
                         <Input
                           id="password"
                           type="password"
-                          placeholder="••••••••••"
+                          placeholder="••••••••••••"
                           value={password}
                           onChange={(e) => setPassword(e.target.value)}
                           required
-                          className="pl-11 h-11 text-sm bg-muted/40 dark:bg-white/[0.04] border-border/50 hover:border-border focus:border-primary/50 focus:bg-background rounded-xl transition-all duration-200"
+                          className="pl-11 h-11 text-sm border-slate-200 hover:border-slate-300 focus:border-violet-400 bg-slate-50/50 focus:bg-white rounded-xl transition-all duration-200 placeholder:text-slate-400 text-slate-900"
                         />
                       </div>
                       {errors.password && (
-                        <p className="text-xs text-destructive font-medium animate-slide-down">{errors.password}</p>
+                        <p className="text-xs text-red-500 font-medium animate-slide-down flex items-center gap-1.5">
+                          <span className="inline-block w-1 h-1 rounded-full bg-red-500" />
+                          {errors.password}
+                        </p>
                       )}
                     </div>
                   )}
 
                   {/* Submit */}
-                  <div className="pt-1">
-                    <Button
-                      type="submit"
-                      className="w-full h-11 text-[13.5px] font-semibold gap-2 rounded-xl transition-all duration-300 hover:gap-3 shadow-lg shadow-primary/25 hover:shadow-xl hover:shadow-primary/35 hover:-translate-y-0.5"
-                      style={{
-                        background: "linear-gradient(135deg, hsl(243, 75%, 59%) 0%, hsl(262, 70%, 58%) 100%)"
-                      }}
-                      disabled={loading}
-                    >
-                      {loading && <Loader2 className="animate-spin h-4 w-4" />}
-                      {mode === "login" ? "Sign In to Platform" : "Send Reset Link"}
-                      {!loading && <ArrowRight className="h-4 w-4" />}
-                    </Button>
-                  </div>
+                  <Button
+                    type="submit"
+                    className="w-full h-11 text-[13.5px] font-bold gap-2 rounded-xl mt-1 transition-all duration-300 hover:gap-3 hover:-translate-y-0.5 hover:shadow-xl active:translate-y-0"
+                    style={{
+                      background: "linear-gradient(135deg, #7c3aed 0%, #9333ea 50%, #6366f1 100%)",
+                      boxShadow: "0 4px 16px -4px rgba(124,58,237,0.5)"
+                    }}
+                    disabled={loading}
+                  >
+                    {loading ? (
+                      <Loader2 className="animate-spin h-4 w-4" />
+                    ) : (
+                      <>
+                        {mode === "login" ? "Sign in to workspace" : "Send reset link"}
+                        <ArrowRight className="h-4 w-4" />
+                      </>
+                    )}
+                  </Button>
                 </form>
 
-                {/* Back to login */}
+                {/* Back link */}
                 {mode === "forgot" && (
-                  <div className="mt-4 text-center">
+                  <div className="mt-5 text-center">
                     <button
                       onClick={() => { setMode("login"); setErrors({}); }}
-                      className="text-sm text-primary/70 hover:text-primary font-semibold transition-colors hover:underline underline-offset-2"
+                      className="text-sm text-violet-600 hover:text-violet-700 font-semibold transition-colors hover:underline underline-offset-2 flex items-center gap-1.5 mx-auto"
                     >
-                      ← Back to sign in
+                      <ChevronRight className="h-3.5 w-3.5 rotate-180" />
+                      Back to sign in
                     </button>
                   </div>
                 )}
 
                 {/* Security notice */}
-                <div className="mt-6 pt-5 border-t border-border/30">
-                  <div className="flex items-center justify-center gap-2 text-muted-foreground/40">
-                    <Shield className="h-3.5 w-3.5" />
+                <div className="mt-6 pt-5 border-t border-slate-100">
+                  <div className="flex items-center justify-center gap-2 text-slate-400/60">
+                    <Shield className="h-3.5 w-3.5 shrink-0" />
                     <p className="text-[11px] text-center leading-relaxed">
-                      Private company tool · Unauthorized access prohibited
+                      Private company platform · Unauthorized access is prohibited
                     </p>
                   </div>
                 </div>
@@ -382,7 +495,8 @@ export default function Login() {
             </div>
           </div>
 
-          <p className="text-center text-[11px] text-muted-foreground/35 font-medium">
+          {/* Footer */}
+          <p className="text-center text-[11px] text-slate-400/50 font-medium mt-6">
             © {new Date().getFullYear()} SKPM Technical Service LLC · All rights reserved
           </p>
         </div>
