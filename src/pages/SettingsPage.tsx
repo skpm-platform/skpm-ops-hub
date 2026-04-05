@@ -413,7 +413,10 @@ function NotificationSettingsTab() {
 // ─── Security Settings Tab ───
 function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
   const { user } = useAuth();
+  const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [changingPassword, setChangingPassword] = useState(false);
   const updateSetting = useUpdateSystemSetting();
   const idleTimeout = useSettingField("idle_timeout_min", "30");
   const maxLoginAttempts = useSettingField("max_login_attempts", "5");
@@ -423,10 +426,25 @@ function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
   const [saving, setSaving] = useState(false);
 
   const updatePassword = async () => {
+    if (!currentPassword) { toast.error("Please enter your current password"); return; }
     if (!isPasswordStrong(newPassword)) { toast.error("Password does not meet strength requirements"); return; }
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    if (error) toast.error(error.message);
-    else { toast.success("Password updated"); setNewPassword(""); await logAudit("Changed password", "User changed their password", "security"); }
+    if (newPassword !== confirmPassword) { toast.error("Passwords do not match"); return; }
+    setChangingPassword(true);
+    try {
+      // Verify current password by re-authenticating
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user?.email ?? "",
+        password: currentPassword,
+      });
+      if (signInError) { toast.error("Current password is incorrect"); return; }
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) toast.error(error.message);
+      else { toast.success("Password updated"); setCurrentPassword(""); setNewPassword(""); setConfirmPassword(""); await logAudit("Changed password", "User changed their password", "security"); }
+    } catch (err: any) {
+      toast.error(err.message || "Failed to update password");
+    } finally {
+      setChangingPassword(false);
+    }
   };
 
   const handleSaveSecuritySettings = async () => {
@@ -459,11 +477,24 @@ function SecuritySettingsTab({ isAdmin }: { isAdmin: boolean }) {
         <CardHeader><CardTitle className="text-base flex items-center gap-2"><Lock className="h-4 w-4" /> Change Password</CardTitle></CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2 max-w-sm">
+            <Label>Current Password</Label>
+            <Input type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} placeholder="Enter your current password" />
+          </div>
+          <div className="space-y-2 max-w-sm">
             <Label>New Password</Label>
             <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} placeholder="Min 8 chars, upper, number, special" />
             <PasswordStrengthMeter password={newPassword} />
           </div>
-          <Button onClick={updatePassword} size="sm" className="h-9" disabled={!isPasswordStrong(newPassword)}>Update Password</Button>
+          <div className="space-y-2 max-w-sm">
+            <Label>Confirm New Password</Label>
+            <Input type="password" value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} placeholder="Re-enter new password" />
+            {confirmPassword && newPassword !== confirmPassword && (
+              <p className="text-xs text-destructive">Passwords do not match</p>
+            )}
+          </div>
+          <Button onClick={updatePassword} size="sm" className="h-9" disabled={!currentPassword || !isPasswordStrong(newPassword) || newPassword !== confirmPassword || changingPassword}>
+            {changingPassword && <Loader2 className="animate-spin mr-2 h-4 w-4" />}Update Password
+          </Button>
         </CardContent>
       </Card>
 

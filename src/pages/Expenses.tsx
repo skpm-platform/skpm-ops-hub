@@ -53,6 +53,9 @@ export default function Expenses() {
 
   const save = useMutation({
     mutationFn: async () => {
+      if (!form.date) throw new Error("Date is required");
+      if (!form.description.trim()) throw new Error("Description is required");
+      if (!form.amount || parseFloat(form.amount) <= 0) throw new Error("Amount must be greater than 0");
       const payload = { ...form, amount: parseFloat(form.amount) || 0 };
       if (editingId) {
         const { error } = await supabase.from("expenses").update(payload).eq("id", editingId);
@@ -189,7 +192,7 @@ export default function Expenses() {
           <div><Label>Category</Label><ComboboxSelect value={form.category} onValueChange={v => setForm({...form, category: v})} options={categoryOptions} placeholder="Select or type..." /></div>
           <div><Label>Description</Label><Input value={form.description} onChange={e => setForm({...form, description: e.target.value})} /></div>
           <div><Label>Amount (AED)</Label><Input type="number" value={form.amount} onChange={e => setForm({...form, amount: e.target.value})} /></div>
-          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit"}</Button>
+          <Button className="w-full h-9" onClick={() => save.mutate()} disabled={save.isPending || !form.date || !form.description.trim() || !form.amount}>{save.isPending ? "Saving..." : editingId ? "Update" : "Submit"}</Button>
         </div>
       </DialogContent></Dialog>
 
