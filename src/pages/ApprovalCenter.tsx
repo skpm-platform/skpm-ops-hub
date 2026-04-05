@@ -45,7 +45,7 @@ export default function ApprovalCenter() {
   const { data: requisitions = [] } = useQuery({
     queryKey: ["approval-requisitions"],
     queryFn: async () => {
-      const { data } = await (supabase as any).from("requisitions").select("*, employees(name)").eq("status", "pending").order("created_at", { ascending: false });
+      const { data } = await supabase.from("requisitions").select("*, employees(name)").eq("status", "pending").order("created_at", { ascending: false });
       return data ?? [];
     },
   });
@@ -53,7 +53,7 @@ export default function ApprovalCenter() {
   const { data: quotations = [] } = useQuery({
     queryKey: ["approval-quotations"],
     queryFn: async () => {
-      const { data } = await (supabase as any).from("quotations").select("*, clients(name)").in("status", ["draft", "sent"]).order("created_at", { ascending: false });
+      const { data } = await supabase.from("quotations").select("*, clients(name)").in("status", ["draft", "sent"]).order("created_at", { ascending: false });
       return data ?? [];
     },
   });
@@ -66,7 +66,7 @@ export default function ApprovalCenter() {
         approved_by: user?.id ?? null,
         approved_at: new Date().toISOString(),
       };
-      const { error } = await (supabase as any).from(table).update(updateData).eq("id", id);
+      const { error } = await supabase.from(table).update(updateData).eq("id", id);
       if (error) throw error;
       await logAudit(`${action === "approve" ? "Approved" : "Rejected"} ${table.replace(/_/g, " ")}`, `Record ID: ${id}`, table);
     },

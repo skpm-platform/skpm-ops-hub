@@ -57,7 +57,7 @@ export default function Attendance() {
   const { data: allActiveEmployees = [] } = useQuery({
     queryKey: ["active-employees-count"],
     queryFn: async () => {
-      const { data } = await (supabase as any).from("employees").select("id, name").eq("status", "active");
+      const { data } = await supabase.from("employees").select("id, name").eq("status", "active");
       return data || [];
     },
     enabled: isAdmin,

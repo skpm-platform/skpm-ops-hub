@@ -33,7 +33,7 @@ export default function GatePasses() {
   const { data: rows = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["gate_passes"],
     queryFn: async () => {
-      const { data, error } = await (supabase as any).from("gate_passes").select("*, manpower(name), sites(name)").order("created_at", { ascending: false });
+      const { data, error } = await supabase.from("gate_passes").select("*, manpower(name), sites(name)").order("created_at", { ascending: false });
       if (error) throw error;
       return data;
     },
@@ -41,11 +41,11 @@ export default function GatePasses() {
 
   const { data: workerList = [] } = useQuery({
     queryKey: ["manpower-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("manpower").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("manpower").select("id, name").order("name"); return data || []; },
   });
   const { data: gpSiteList = [] } = useQuery({
     queryKey: ["sites-gp-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("sites").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("sites").select("id, name").order("name"); return data || []; },
   });
 
   const save = useMutation({
@@ -53,7 +53,7 @@ export default function GatePasses() {
       const payload: any = { ...form, issued_by: user?.id };
       if (form.worker_id) payload.worker_id = form.worker_id;
       if (form.site_id) payload.site_id = form.site_id;
-      const { error } = await (supabase as any).from("gate_passes").insert(payload);
+      const { error } = await supabase.from("gate_passes").insert(payload);
       if (error) throw error;
       await logAudit("Issued gate pass", form.pass_no, "gate_passes");
     },

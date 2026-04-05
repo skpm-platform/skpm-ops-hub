@@ -829,6 +829,44 @@ export type Database = {
         }
         Relationships: []
       }
+      inventory_movements: {
+        Row: {
+          id: string
+          inventory_id: string | null
+          type: string | null
+          quantity: number | null
+          note: string | null
+          created_at: string | null
+          created_by: string | null
+        }
+        Insert: {
+          id?: string
+          inventory_id?: string | null
+          type?: string | null
+          quantity?: number | null
+          note?: string | null
+          created_at?: string | null
+          created_by?: string | null
+        }
+        Update: {
+          id?: string
+          inventory_id?: string | null
+          type?: string | null
+          quantity?: number | null
+          note?: string | null
+          created_at?: string | null
+          created_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_movements_inventory_id_fkey"
+            columns: ["inventory_id"]
+            isOneToOne: false
+            referencedRelation: "inventory"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       invitations: {
         Row: {
           created_at: string
@@ -1013,6 +1051,69 @@ export type Database = {
           type?: string | null
         }
         Relationships: []
+      }
+      manpower: {
+        Row: {
+          id: string
+          name: string
+          trade: string | null
+          camp_name: string | null
+          visa_expiry: string | null
+          passport_no: string | null
+          nationality: string | null
+          status: string | null
+          daily_rate: number | null
+          created_at: string | null
+          updated_at: string | null
+          client_id: string | null
+          project_id: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          trade?: string | null
+          camp_name?: string | null
+          visa_expiry?: string | null
+          passport_no?: string | null
+          nationality?: string | null
+          status?: string | null
+          daily_rate?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          client_id?: string | null
+          project_id?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          trade?: string | null
+          camp_name?: string | null
+          visa_expiry?: string | null
+          passport_no?: string | null
+          nationality?: string | null
+          status?: string | null
+          daily_rate?: number | null
+          created_at?: string | null
+          updated_at?: string | null
+          client_id?: string | null
+          project_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manpower_client_id_fkey"
+            columns: ["client_id"]
+            isOneToOne: false
+            referencedRelation: "clients"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manpower_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       mp_billing: {
         Row: {

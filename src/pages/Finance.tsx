@@ -68,11 +68,11 @@ export default function Finance() {
         receipt_url: form.receipt_url || null,
       };
       if (editingId) {
-        const { error } = await (supabase as any).from("transactions").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("transactions").update(payload).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated transaction", `${form.type}: AED ${form.amount}`, "finance");
       } else {
-        const { error } = await (supabase as any).from("transactions").insert({ ...payload, created_by: user.id });
+        const { error } = await supabase.from("transactions").insert({ ...payload, created_by: user.id });
         if (error) throw error;
         await logAudit("Added transaction", `${form.type}: AED ${form.amount}`, "finance");
       }

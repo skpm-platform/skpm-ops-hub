@@ -132,7 +132,7 @@ export default function Dashboard() {
   const { data: helpdeskTickets } = useQuery({
     queryKey: ["dashboard-helpdesk-open"],
     queryFn: async () => {
-      const { data } = await (supabase as any).from("helpdesk_tickets").select("id").eq("status", "open");
+      const { data } = await supabase.from("helpdesk_tickets").select("id").eq("status", "open");
       return data ?? [];
     },
   });
@@ -142,7 +142,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const now = format(new Date(), "yyyy-MM-dd");
       const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
-      const { data } = await (supabase as any).from("manpower").select("id,name,visa_expiry").lte("visa_expiry", in30).gte("visa_expiry", now);
+      const { data } = await supabase.from("manpower").select("id,name,visa_expiry").lte("visa_expiry", in30).gte("visa_expiry", now);
       return data ?? [];
     },
   });
@@ -152,7 +152,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const now = format(new Date(), "yyyy-MM-dd");
       const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
-      const { data } = await (supabase as any).from("contracts").select("id,title,end_date").lte("end_date", in30).gte("end_date", now);
+      const { data } = await supabase.from("contracts").select("id,title,end_date").lte("end_date", in30).gte("end_date", now);
       return data ?? [];
     },
   });
@@ -162,7 +162,7 @@ export default function Dashboard() {
     queryFn: async () => {
       const now = format(new Date(), "yyyy-MM-dd");
       const in30 = format(addDays(new Date(), 30), "yyyy-MM-dd");
-      const { data } = await (supabase as any).from("assets").select("id,name,next_maintenance_date").lte("next_maintenance_date", in30).gte("next_maintenance_date", now);
+      const { data } = await supabase.from("assets").select("id,name,next_maintenance_date").lte("next_maintenance_date", in30).gte("next_maintenance_date", now);
       return data ?? [];
     },
   });

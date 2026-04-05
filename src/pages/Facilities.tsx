@@ -41,7 +41,7 @@ export default function Facilities() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["facilities"],
-    queryFn: async () => { const { data } = await (supabase as any).from("facilities").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("facilities").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
   const { data: clients = [] } = useQuery({
@@ -64,15 +64,15 @@ export default function Facilities() {
       if (form.contact_phone) payload.contact_phone = form.contact_phone;
       if (form.next_maintenance_date) payload.next_maintenance_date = form.next_maintenance_date;
       if (form.last_maintenance_date) payload.last_maintenance_date = form.last_maintenance_date;
-      if (editingId) { const { error } = await (supabase as any).from("facilities").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("facilities").insert(payload); if (error) throw error; }
+      if (editingId) { const { error } = await supabase.from("facilities").update(payload).eq("id", editingId); if (error) throw error; }
+      else { const { error } = await supabase.from("facilities").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["facilities"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("facilities").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("facilities").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["facilities"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 

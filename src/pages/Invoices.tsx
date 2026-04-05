@@ -65,11 +65,11 @@ export default function Invoices() {
       const sub = parseFloat(form.subtotal) || 0;
       const vat = sub * 0.05;
       if (editingId) {
-        const { error } = await (supabase as any).from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status, payment_terms: form.payment_terms || null, notes: form.notes || null }).eq("id", editingId);
+        const { error } = await supabase.from("invoices").update({ subtotal: sub, vat, total: sub + vat, due_date: form.due_date || null, client_id: form.client_id || null, status: form.status, payment_terms: form.payment_terms || null, notes: form.notes || null }).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated invoice", editingId, "invoices");
       } else {
-        const { error } = await (supabase as any).from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null, payment_terms: form.payment_terms || null, notes: form.notes || null });
+        const { error } = await supabase.from("invoices").insert({ subtotal: sub, vat, total: sub + vat, invoice_no: `INV-${Date.now().toString().slice(-6)}`, created_by: user?.id, client_id: form.client_id || null, due_date: form.due_date || null, payment_terms: form.payment_terms || null, notes: form.notes || null });
         if (error) throw error;
         await logAudit("Created invoice", `AED ${(sub + vat).toLocaleString()}`, "invoices");
       }
@@ -90,7 +90,7 @@ export default function Invoices() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await (supabase as any).from("invoices").update({ status }).eq("id", id);
+      const { error } = await supabase.from("invoices").update({ status }).eq("id", id);
       if (error) throw error;
       await logAudit("Updated invoice status", `${id} → ${status}`, "invoices");
     },

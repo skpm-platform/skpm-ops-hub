@@ -74,7 +74,7 @@ export default function Reports() {
       await Promise.all(
         reports.map(async (r) => {
           try {
-            const { count } = await (supabase as any)
+            const { count } = await supabase
               .from(r.table)
               .select("*", { count: "exact", head: true });
             result[r.table] = count ?? 0;
@@ -97,7 +97,7 @@ export default function Reports() {
 
   const handleExport = async (r: ReportDef, exportType: "csv" | "excel") => {
     try {
-      let query = (supabase as any).from(r.table).select("*").order("created_at", { ascending: false }).limit(5000);
+      let query = supabase.from(r.table).select("*").order("created_at", { ascending: false }).limit(5000);
       if (applyDateFilter && r.dateField) {
         query = query.gte(r.dateField, dateFrom).lte(r.dateField, dateTo);
       }
@@ -130,7 +130,7 @@ export default function Reports() {
     setPreviewReport(r);
     setPreviewLoading(true);
     try {
-      let query = (supabase as any).from(r.table).select("*").order("created_at", { ascending: false }).limit(10);
+      let query = supabase.from(r.table).select("*").order("created_at", { ascending: false }).limit(10);
       if (applyDateFilter && r.dateField) {
         query = query.gte(r.dateField, dateFrom).lte(r.dateField, dateTo);
       }

@@ -40,7 +40,7 @@ export default function DutyRoster() {
 
   const { data: drEmployeeList = [] } = useQuery({
     queryKey: ["dr-employees-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("employees").select("id, name").order("name"); return data || []; },
   });
 
   const save = useMutation({

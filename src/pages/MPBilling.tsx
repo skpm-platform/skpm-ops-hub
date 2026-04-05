@@ -57,7 +57,7 @@ export default function MPBilling() {
       const total_amount = Number(form.total_workers) * Number(form.total_days) * Number(form.rate);
       const payload = { ...form, total_workers: Number(form.total_workers), total_days: Number(form.total_days), rate: Number(form.rate), total_amount, client_id: form.client_id || null, project_id: form.project_id || null };
       if (editingId) {
-        const { error } = await (supabase as any).from("mp_billing").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("mp_billing").update(payload).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated MP billing", `${total_amount} AED`, "mp_billing");
       } else {
@@ -78,7 +78,7 @@ export default function MPBilling() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("mp_billing").delete().eq("id", id);
+      const { error } = await supabase.from("mp_billing").delete().eq("id", id);
       if (error) throw error;
       await logAudit("Deleted MP billing", id, "mp_billing");
     },
@@ -88,7 +88,7 @@ export default function MPBilling() {
 
   const updateStatus = useMutation({
     mutationFn: async ({ id, status }: { id: string; status: string }) => {
-      const { error } = await (supabase as any).from("mp_billing").update({ status }).eq("id", id);
+      const { error } = await supabase.from("mp_billing").update({ status }).eq("id", id);
       if (error) throw error;
       await logAudit("Updated MP billing status", `${id} → ${status}`, "mp_billing");
     },

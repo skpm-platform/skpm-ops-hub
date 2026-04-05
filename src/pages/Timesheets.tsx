@@ -39,15 +39,15 @@ export default function Timesheets() {
 
   const { data: employeeList = [] } = useQuery({
     queryKey: ["employees-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("employees").select("id, name").order("name"); return data || []; },
   });
   const { data: projectList = [] } = useQuery({
     queryKey: ["projects-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("projects").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("projects").select("id, name").order("name"); return data || []; },
   });
   const { data: siteList = [] } = useQuery({
     queryKey: ["sites-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("sites").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("sites").select("id, name").order("name"); return data || []; },
   });
 
   const save = useMutation({

@@ -74,7 +74,7 @@ export default function Training() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["training"],
-    queryFn: async () => { const { data } = await (supabase as any).from("training_programs").select("*").order("date", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("training_programs").select("*").order("date", { ascending: false }); return data || []; },
   });
 
   const resetForm = () => setForm({
@@ -93,21 +93,21 @@ export default function Training() {
         result: form.result,
         provider: form.provider,
       };
-      if (editingId) { const { error } = await (supabase as any).from("training_programs").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("training_programs").insert(payload); if (error) throw error; }
+      if (editingId) { const { error } = await supabase.from("training_programs").update(payload).eq("id", editingId); if (error) throw error; }
+      else { const { error } = await supabase.from("training_programs").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["training"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("training_programs").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("training_programs").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["training"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
   const markComplete = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("training_programs").update({ status: "completed", completion_pct: 100 }).eq("id", id);
+      const { error } = await supabase.from("training_programs").update({ status: "completed", completion_pct: 100 }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_, id) => {

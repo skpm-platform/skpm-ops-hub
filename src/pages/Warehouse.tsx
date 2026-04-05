@@ -45,7 +45,7 @@ export default function Warehouse() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["inventory"],
-    queryFn: async () => { const { data } = await (supabase as any).from("inventory").select("*").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("inventory").select("*").order("name"); return data || []; },
   });
 
   const resetForm = () => setForm({ name: "", sku: "", category: "", quantity: "", min_stock: "", reorder_level: "", unit_cost: "", unit: "pcs", location: "" });
@@ -53,15 +53,15 @@ export default function Warehouse() {
   const save = useMutation({
     mutationFn: async () => {
       const payload = { name: form.name, category: form.category, quantity: parseInt(form.quantity) || 0, min_stock: parseInt(form.min_stock) || 0, reorder_level: parseInt(form.reorder_level) || null, unit_cost: parseFloat(form.unit_cost) || 0, unit: form.unit, location: form.location, last_updated: new Date().toISOString(), ...(editingId ? {} : { sku: form.sku || `SKU-${Date.now().toString().slice(-6)}` }), ...(editingId && form.sku ? { sku: form.sku } : {}) };
-      if (editingId) { const { error } = await (supabase as any).from("inventory").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("inventory").insert(payload); if (error) throw error; }
+      if (editingId) { const { error } = await supabase.from("inventory").update(payload).eq("id", editingId); if (error) throw error; }
+      else { const { error } = await supabase.from("inventory").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["inventory"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("inventory").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("inventory").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["inventory"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
@@ -70,10 +70,10 @@ export default function Warehouse() {
       const item = data.find((r: any) => r.id === id);
       if (!item) throw new Error("Item not found");
       const newQty = Math.max(0, (item.quantity || 0) + delta);
-      const { error } = await (supabase as any).from("inventory").update({ quantity: newQty, last_updated: new Date().toISOString() }).eq("id", id);
+      const { error } = await supabase.from("inventory").update({ quantity: newQty, last_updated: new Date().toISOString() }).eq("id", id);
       if (error) throw error;
       // Log movement
-      await (supabase as any).from("inventory_movements").insert({ inventory_id: id, type, quantity: Math.abs(delta), note: `Stock ${type === "in" ? "In" : "Out"} via quick action` }).catch(() => {});
+      await supabase.from("inventory_movements").insert({ inventory_id: id, type, quantity: Math.abs(delta), note: `Stock ${type === "in" ? "In" : "Out"} via quick action` }).catch(() => {});
       return newQty;
     },
     onSuccess: (newQty, vars) => {

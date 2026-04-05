@@ -55,7 +55,7 @@ export default function Accommodation() {
     queryKey: ["accommodation-residents", viewing?.id],
     enabled: !!viewing && showResidents,
     queryFn: async () => {
-      const { data: byId } = await (supabase as any).from("employees").select("id, name, position").eq("site_id", viewing.id);
+      const { data: byId } = await supabase.from("employees").select("id, name, position").eq("site_id", viewing.id);
       return (byId as any[]) || [];
     },
   });
@@ -67,15 +67,15 @@ export default function Accommodation() {
       const payload: any = { camp_name: form.camp_name, location: form.location, total_beds: parseInt(form.total_beds) || 0, occupied_beds: parseInt(form.occupied_beds) || 0, cost_per_bed: parseFloat(form.cost_per_bed) || 0, status: form.status };
       if (form.contract_start) payload.contract_start = form.contract_start;
       if (form.contract_end) payload.contract_end = form.contract_end;
-      if (editingId) { const { error } = await (supabase as any).from("accommodations").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("accommodations").insert(payload); if (error) throw error; }
+      if (editingId) { const { error } = await supabase.from("accommodations").update(payload).eq("id", editingId); if (error) throw error; }
+      else { const { error } = await supabase.from("accommodations").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["accommodations"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("accommodations").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("accommodations").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["accommodations"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 

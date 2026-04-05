@@ -76,7 +76,7 @@ export default function Tasks() {
 
   const { data: employees = [] } = useQuery({
     queryKey: ["employees-list-tasks"],
-    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("employees").select("id, name").order("name"); return data || []; },
   });
 
   const employeeOptions = employees.map((e: any) => ({ value: e.id, label: e.name }));

@@ -83,17 +83,17 @@ export default function HSE() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["hse"],
-    queryFn: async () => { const { data } = await (supabase as any).from("hse_incidents").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("hse_incidents").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
   const save = useMutation({
     mutationFn: async () => {
       if (editingId) {
-        const { error } = await (supabase as any).from("hse_incidents").update(form).eq("id", editingId);
+        const { error } = await supabase.from("hse_incidents").update(form).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated HSE incident", form.type, "hse");
       } else {
-        const { error } = await (supabase as any).from("hse_incidents").insert({ ...form, reported_by: user?.id });
+        const { error } = await supabase.from("hse_incidents").insert({ ...form, reported_by: user?.id });
         if (error) throw error;
         await logAudit("Reported HSE incident", form.type, "hse");
       }
@@ -104,7 +104,7 @@ export default function HSE() {
 
   const remove = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("hse_incidents").delete().eq("id", id);
+      const { error } = await supabase.from("hse_incidents").delete().eq("id", id);
       if (error) throw error;
       await logAudit("Deleted HSE incident", id, "hse");
     },
@@ -115,7 +115,7 @@ export default function HSE() {
   const closeIncident = useMutation({
     mutationFn: async (id: string) => {
       const today = new Date().toISOString().split("T")[0];
-      const { error } = await (supabase as any).from("hse_incidents").update({ status: "closed", closed_date: today }).eq("id", id);
+      const { error } = await supabase.from("hse_incidents").update({ status: "closed", closed_date: today }).eq("id", id);
       if (error) throw error;
       await logAudit("Closed HSE incident", id, "hse");
     },

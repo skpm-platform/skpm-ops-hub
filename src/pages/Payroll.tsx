@@ -55,11 +55,11 @@ export default function Payroll() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["payroll"],
-    queryFn: async () => { const { data } = await (supabase as any).from("payroll").select("*, employees(name)").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("payroll").select("*, employees(name)").order("created_at", { ascending: false }); return data || []; },
   });
   const { data: employees = [] } = useQuery({
     queryKey: ["emp-pay"],
-    queryFn: async () => { const { data } = await (supabase as any).from("employees").select("id,name,basic_salary"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("employees").select("id,name,basic_salary"); return data || []; },
   });
 
   const resetForm = () => setForm({
@@ -90,10 +90,10 @@ export default function Payroll() {
         net_pay: calcNet(form), status: form.status, payable_days: parseInt(form.payable_days) || 30,
       };
       if (editingId) {
-        const { error } = await (supabase as any).from("payroll").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("payroll").update(payload).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await (supabase as any).from("payroll").insert(payload);
+        const { error } = await supabase.from("payroll").insert(payload);
         if (error) throw error;
       }
     },
@@ -102,13 +102,13 @@ export default function Payroll() {
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("payroll").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("payroll").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["payroll"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
   const markPaid = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("payroll").update({ status: "paid" }).eq("id", id);
+      const { error } = await supabase.from("payroll").update({ status: "paid" }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: (_, id) => {
@@ -125,9 +125,9 @@ export default function Payroll() {
       const mon = parseInt(genMonth);
       const yr = parseInt(genYear);
       toast.loading("Fetching employees...");
-      const { data: emps, error: empErr } = await (supabase as any).from("employees").select("id,name,basic_salary");
+      const { data: emps, error: empErr } = await supabase.from("employees").select("id,name,basic_salary");
       if (empErr) throw empErr;
-      const { data: existing, error: exErr } = await (supabase as any).from("payroll").select("employee_id").eq("month", mon).eq("year", yr);
+      const { data: existing, error: exErr } = await supabase.from("payroll").select("employee_id").eq("month", mon).eq("year", yr);
       if (exErr) throw exErr;
       const existingIds = new Set((existing || []).map((r: any) => r.employee_id));
       const toInsert = (emps || []).filter((e: any) => !existingIds.has(e.id));
@@ -142,7 +142,7 @@ export default function Payroll() {
         food_allowance: 0, overtime_pay: 0, deductions: 0,
         net_pay: e.basic_salary || 0, payable_days: 30, status: "draft",
       }));
-      const { error } = await (supabase as any).from("payroll").insert(records);
+      const { error } = await supabase.from("payroll").insert(records);
       if (error) throw error;
       return records.length;
     },

@@ -56,11 +56,11 @@ export default function Contracts() {
         renewal_date: form.renewal_date || null,
       };
       if (editingId) {
-        const { error } = await (supabase as any).from("contracts").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("contracts").update(payload).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated contract", `Contract ${editingId}`, "contracts");
       } else {
-        const { error } = await (supabase as any).from("contracts").insert({ ...payload, contract_no: `CON-${Date.now().toString().slice(-6)}` });
+        const { error } = await supabase.from("contracts").insert({ ...payload, contract_no: `CON-${Date.now().toString().slice(-6)}` });
         if (error) throw error;
         await logAudit("Created contract", payload.type, "contracts");
       }

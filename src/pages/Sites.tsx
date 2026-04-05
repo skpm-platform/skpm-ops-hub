@@ -53,7 +53,7 @@ export default function Sites() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["sites"],
-    queryFn: async () => { const { data } = await (supabase as any).from("sites").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("sites").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
 
   const resetForm = () => setForm({ name: "", location: "", emirate: "Dubai", type: "industrial", gps_coordinates: "", status: "active" });
@@ -62,11 +62,11 @@ export default function Sites() {
     mutationFn: async () => {
       const payload = { name: form.name, location: form.location, emirate: form.emirate, type: form.type, gps_coordinates: form.gps_coordinates || null, status: form.status };
       if (editingId) {
-        const { error } = await (supabase as any).from("sites").update(payload).eq("id", editingId);
+        const { error } = await supabase.from("sites").update(payload).eq("id", editingId);
         if (error) throw error;
         await logAudit("Updated site", form.name, "sites");
       } else {
-        const { error } = await (supabase as any).from("sites").insert(payload);
+        const { error } = await supabase.from("sites").insert(payload);
         if (error) throw error;
         await logAudit("Created site", `${form.name} — ${form.emirate}`, "sites");
       }
@@ -78,7 +78,7 @@ export default function Sites() {
   const del = useMutation({
     mutationFn: async (id: string) => {
       const site = data.find((r: any) => r.id === id);
-      const { error } = await (supabase as any).from("sites").delete().eq("id", id);
+      const { error } = await supabase.from("sites").delete().eq("id", id);
       if (error) throw error;
       await logAudit("Deleted site", site?.name, "sites");
     },

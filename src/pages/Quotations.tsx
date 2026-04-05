@@ -50,9 +50,9 @@ export default function Quotations() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["quotations"],
-    queryFn: async () => { const { data } = await (supabase as any).from("quotations").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("quotations").select("*, clients(name)").order("created_at", { ascending: false }); return data || []; },
   });
-  const { data: clients = [] } = useQuery({ queryKey: ["clients-q"], queryFn: async () => { const { data } = await (supabase as any).from("clients").select("id,name"); return data || []; } });
+  const { data: clients = [] } = useQuery({ queryKey: ["clients-q"], queryFn: async () => { const { data } = await supabase.from("clients").select("id,name"); return data || []; } });
 
   const resetForm = () => { setForm({ client_id: "", valid_until: "", subtotal: "", status: "draft" }); setFormErrors({}); };
 
@@ -69,10 +69,10 @@ export default function Quotations() {
       const subtotal = parseFloat(result.data.subtotal) || 0;
       const vat = subtotal * 0.05;
       if (editingId) {
-        const { error } = await (supabase as any).from("quotations").update({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, valid_until: result.data.valid_until || null, status: result.data.status }).eq("id", editingId);
+        const { error } = await supabase.from("quotations").update({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, valid_until: result.data.valid_until || null, status: result.data.status }).eq("id", editingId);
         if (error) throw error;
       } else {
-        const { error } = await (supabase as any).from("quotations").insert({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, quote_no: `QT-${Date.now().toString().slice(-6)}`, created_by: user?.id, valid_until: result.data.valid_until || null, status: result.data.status });
+        const { error } = await supabase.from("quotations").insert({ client_id: result.data.client_id || null, subtotal, vat, total: subtotal + vat, quote_no: `QT-${Date.now().toString().slice(-6)}`, created_by: user?.id, valid_until: result.data.valid_until || null, status: result.data.status });
         if (error) throw error;
       }
     },
@@ -81,14 +81,14 @@ export default function Quotations() {
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("quotations").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("quotations").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
   const bulkDelete = useMutation({
     mutationFn: async () => {
       const ids = Array.from(selected);
-      const { error } = await (supabase as any).from("quotations").delete().in("id", ids);
+      const { error } = await supabase.from("quotations").delete().in("id", ids);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["quotations"] }); toast.success(`${selected.size} items deleted`); setSelected(new Set()); setBulkDeleteOpen(false); },
@@ -97,7 +97,7 @@ export default function Quotations() {
 
   const markSent = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("quotations").update({ status: "sent" }).eq("id", id);
+      const { error } = await supabase.from("quotations").update({ status: "sent" }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -110,7 +110,7 @@ export default function Quotations() {
 
   const convertToInvoice = useMutation({
     mutationFn: async (q: any) => {
-      const { error } = await (supabase as any).from("invoices").insert({
+      const { error } = await supabase.from("invoices").insert({
         client_id: q.client_id || null,
         subtotal: q.subtotal,
         vat: q.vat,

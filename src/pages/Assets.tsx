@@ -102,7 +102,7 @@ export default function Assets() {
 
   const { data: sites = [] } = useQuery({
     queryKey: ["sites-list"],
-    queryFn: async () => { const { data } = await (supabase as any).from("sites").select("id, name").order("name"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("sites").select("id, name").order("name"); return data || []; },
   });
 
   const save = useMutation({

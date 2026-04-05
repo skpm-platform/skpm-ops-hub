@@ -77,7 +77,7 @@ export default function Transport() {
 
   const { data = [], isLoading , isError: dataLoadError} = useQuery({
     queryKey: ["vehicles"],
-    queryFn: async () => { const { data } = await (supabase as any).from("vehicles").select("*").order("created_at", { ascending: false }); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("vehicles").select("*").order("created_at", { ascending: false }); return data || []; },
   });
 
   const { data: employees = [] } = useQuery({
@@ -87,7 +87,7 @@ export default function Transport() {
 
   const tripLogs = useQuery({
     queryKey: ["trip_logs"],
-    queryFn: async () => { const { data } = await (supabase as any).from("trip_logs").select("*"); return data || []; },
+    queryFn: async () => { const { data } = await supabase.from("trip_logs").select("*"); return data || []; },
   });
 
   const resetForm = () => setForm({
@@ -109,21 +109,21 @@ export default function Transport() {
         photo_url: form.photo_url || null,
         ...(editingId ? {} : { vehicle_no: `VEH-${Date.now().toString().slice(-6)}` }),
       };
-      if (editingId) { const { error } = await (supabase as any).from("vehicles").update(payload).eq("id", editingId); if (error) throw error; }
-      else { const { error } = await (supabase as any).from("vehicles").insert(payload); if (error) throw error; }
+      if (editingId) { const { error } = await supabase.from("vehicles").update(payload).eq("id", editingId); if (error) throw error; }
+      else { const { error } = await supabase.from("vehicles").insert(payload); if (error) throw error; }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["vehicles"] }); toast.success(editingId ? "Updated" : "Added"); setOpen(false); setEditingId(null); resetForm(); },
     onError: (e: any) => toast.error(e.message),
   });
 
   const del = useMutation({
-    mutationFn: async (id: string) => { const { error } = await (supabase as any).from("vehicles").delete().eq("id", id); if (error) throw error; },
+    mutationFn: async (id: string) => { const { error } = await supabase.from("vehicles").delete().eq("id", id); if (error) throw error; },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["vehicles"] }); toast.success("Deleted"); setDeleteId(null); },
   });
 
   const completeTripMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await (supabase as any).from("vehicles").update({ status: "active" }).eq("id", id);
+      const { error } = await supabase.from("vehicles").update({ status: "active" }).eq("id", id);
       if (error) throw error;
     },
     onSuccess: () => {
