@@ -6,22 +6,19 @@ import {
   Users,
   MoreHorizontal,
 } from "lucide-react";
+import { useSidebar } from "@/components/ui/sidebar";
 
 // ============================================================================
-// MobileBottomNav — A glass-effect bottom navigation bar visible only on
-// mobile devices (< sm breakpoint). Provides quick access to the 5 most
-// important sections of the SKPM Ops Hub.
+// MobileBottomNav — Glass-effect bottom navigation bar for mobile.
+// The "More" button now toggles the full-screen sidebar overlay.
 // ============================================================================
 
 interface NavTab {
-  /** Display label */
   label: string;
-  /** Route path (prefix-matched for active state) */
   path: string;
-  /** Lucide icon component */
   icon: React.ComponentType<{ className?: string }>;
-  /** Optional badge count (e.g. pending tasks) */
   badge?: number;
+  action?: "sidebar";
 }
 
 const tabs: NavTab[] = [
@@ -29,26 +26,23 @@ const tabs: NavTab[] = [
   { label: "Tasks", path: "/tasks", icon: CheckSquare },
   { label: "Finance", path: "/finance", icon: Wallet },
   { label: "People", path: "/employees", icon: Users },
-  { label: "More", path: "/more", icon: MoreHorizontal },
+  { label: "More", path: "", icon: MoreHorizontal, action: "sidebar" },
 ];
 
-/**
- * Determine if a tab is currently active.
- * Dashboard ("/") is only active on exact match; others use prefix matching.
- */
 function isTabActive(tabPath: string, currentPath: string): boolean {
+  if (!tabPath) return false;
   if (tabPath === "/") return currentPath === "/";
   return currentPath.startsWith(tabPath);
 }
 
 interface MobileBottomNavProps {
-  /** Optional badge count for the Tasks tab */
   taskCount?: number;
 }
 
 export function MobileBottomNav({ taskCount }: MobileBottomNavProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toggleSidebar, openMobile } = useSidebar();
 
   return (
     <nav
@@ -67,18 +61,20 @@ export function MobileBottomNav({ taskCount }: MobileBottomNavProps) {
     >
       <div className="flex items-stretch justify-around h-16 max-w-lg mx-auto px-1">
         {tabs.map((tab) => {
-          const active = isTabActive(
-            tab.path,
-            location.pathname
-          );
+          const active = tab.action === "sidebar" ? openMobile : isTabActive(tab.path, location.pathname);
           const IconComp = tab.icon;
-          const badgeValue =
-            tab.label === "Tasks" && taskCount ? taskCount : tab.badge;
+          const badgeValue = tab.label === "Tasks" && taskCount ? taskCount : tab.badge;
 
           return (
             <button
-              key={tab.path}
-              onClick={() => navigate(tab.path)}
+              key={tab.label}
+              onClick={() => {
+                if (tab.action === "sidebar") {
+                  toggleSidebar();
+                } else {
+                  navigate(tab.path);
+                }
+              }}
               className={`
                 relative flex flex-col items-center justify-center flex-1
                 min-w-0 gap-0.5 pt-1.5 pb-1
@@ -86,54 +82,32 @@ export function MobileBottomNav({ taskCount }: MobileBottomNavProps) {
                 ${active ? "text-primary" : "text-muted-foreground"}
               `}
               aria-label={tab.label}
-              aria-current={active ? "page" : undefined}
+              aria-current={active && tab.action !== "sidebar" ? "page" : undefined}
             >
-              {/* Active indicator — gradient bar at top */}
               {active && (
                 <span
                   className="absolute top-0 left-1/2 -translate-x-1/2 h-[3px] w-8 rounded-b-full"
                   style={{
-                    background:
-                      "linear-gradient(90deg, hsl(var(--primary)), hsl(260 70% 58%))",
+                    background: "linear-gradient(90deg, hsl(var(--primary)), hsl(260 70% 58%))",
                   }}
                 />
               )}
 
-              {/* Icon with optional badge */}
               <span className="relative">
                 <IconComp
-                  className={`h-5 w-5 transition-transform duration-200 ${
-                    active ? "scale-110" : ""
-                  }`}
+                  className={`h-5 w-5 transition-transform duration-200 ${active ? "scale-110" : ""}`}
                 />
-                {/* Badge count */}
                 {badgeValue != null && badgeValue > 0 && (
-                  <span
-                    className="
-                      absolute -top-1.5 -right-2.5
-                      min-w-[16px] h-4 px-1
-                      flex items-center justify-center
-                      rounded-full text-[10px] font-bold leading-none
-                      bg-destructive text-destructive-foreground
-                      ring-2 ring-background
-                    "
-                  >
+                  <span className="absolute -top-1.5 -right-2.5 min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full text-[10px] font-bold leading-none bg-destructive text-destructive-foreground ring-2 ring-background">
                     {badgeValue > 99 ? "99+" : badgeValue}
                   </span>
                 )}
-
-                {/* Animated active dot */}
                 {active && (
                   <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-primary animate-pulse-soft" />
                 )}
               </span>
 
-              {/* Label */}
-              <span
-                className={`text-[10px] leading-tight font-medium truncate max-w-full ${
-                  active ? "text-primary" : ""
-                }`}
-              >
+              <span className={`text-[10px] leading-tight font-medium truncate max-w-full ${active ? "text-primary" : ""}`}>
                 {tab.label}
               </span>
             </button>

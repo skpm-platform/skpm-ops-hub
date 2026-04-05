@@ -197,9 +197,9 @@ export function AppSidebar() {
           {/* Logo mark */}
           <div className="h-9 w-9 rounded-xl flex items-center justify-center p-1.5 shrink-0 relative"
             style={{
-              background: "linear-gradient(135deg, rgba(124,58,237,0.25) 0%, rgba(139,92,246,0.1) 100%)",
-              border: "1px solid rgba(139,92,246,0.2)",
-              boxShadow: "0 2px 12px rgba(124,58,237,0.2)"
+              background: "linear-gradient(135deg, rgba(99,102,241,0.3) 0%, rgba(129,140,248,0.15) 100%)",
+              border: "1px solid rgba(129,140,248,0.25)",
+              boxShadow: "0 2px 12px rgba(99,102,241,0.25)"
             }}
           >
             <img src={logoSrc} alt="SKPM" className="h-full w-full rounded-lg object-contain" />
@@ -223,7 +223,7 @@ export function AppSidebar() {
         </div>
 
         {/* Divider */}
-        <div className="mx-4 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.2), transparent)" }} />
+        <div className="mx-4 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(129,140,248,0.2), transparent)" }} />
       </SidebarHeader>
 
       {/* ── Navigation ── */}
@@ -249,9 +249,9 @@ export function AppSidebar() {
                               className="relative flex h-9 w-9 items-center justify-center rounded-xl transition-all duration-200 text-sidebar-foreground/45 hover:text-sidebar-foreground/80 hover:bg-sidebar-accent"
                               activeClassName="text-white"
                               style={itemActive ? {
-                                background: "linear-gradient(135deg, rgba(124,58,237,0.3), rgba(139,92,246,0.15))",
-                                border: "1px solid rgba(139,92,246,0.25)",
-                                boxShadow: "0 0 12px -2px rgba(124,58,237,0.3)"
+                                background: "linear-gradient(135deg, rgba(99,102,241,0.3), rgba(129,140,248,0.15))",
+                                border: "1px solid rgba(129,140,248,0.25)",
+                                boxShadow: "0 0 12px -2px rgba(99,102,241,0.3)"
                               } : undefined}
                             >
                               <item.icon className="h-[15px] w-[15px]" />
@@ -304,19 +304,19 @@ export function AppSidebar() {
                                 className="flex items-center gap-2.5 px-3 py-2 rounded-xl text-[12.5px] font-medium transition-all duration-150 group/item"
                                 activeClassName=""
                                 style={itemActive ? {
-                                  background: "linear-gradient(135deg, rgba(124,58,237,0.22) 0%, rgba(139,92,246,0.1) 100%)",
-                                  color: "rgba(250,245,255,0.95)",
-                                  borderLeft: "2.5px solid rgba(167,139,250,0.8)",
+                                  background: "linear-gradient(135deg, rgba(99,102,241,0.22) 0%, rgba(129,140,248,0.1) 100%)",
+                                  color: "rgba(248,250,255,0.95)",
+                                  borderLeft: "2.5px solid rgba(129,140,248,0.8)",
                                   paddingLeft: "calc(0.75rem - 2.5px)",
                                 } : {
-                                  color: "rgba(250,245,255,0.5)",
+                                  color: "rgba(248,250,255,0.5)",
                                   borderLeft: "2.5px solid transparent",
                                   paddingLeft: "calc(0.75rem - 2.5px)",
                                 }}
                               >
                                 <item.icon
                                   className="h-[15px] w-[15px] shrink-0 transition-colors duration-150"
-                                  style={{ color: itemActive ? "rgba(167,139,250,1)" : "rgba(250,245,255,0.3)" }}
+                                  style={{ color: itemActive ? "rgba(129,140,248,1)" : "rgba(248,250,255,0.3)" }}
                                 />
                                 <span className="flex-1 truncate">{item.title}</span>
                                 {count > 0 && (
@@ -339,19 +339,19 @@ export function AppSidebar() {
       </SidebarContent>
 
       {/* ── Footer ── */}
-      <div className="mx-4 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(139,92,246,0.2), transparent)" }} />
+      <div className="mx-4 h-px" style={{ background: "linear-gradient(90deg, transparent, rgba(129,140,248,0.2), transparent)" }} />
 
       <SidebarFooter className="p-3 space-y-1.5">
 
         {/* User profile card */}
         {!collapsed && (
           <div className="flex items-center gap-2.5 px-2.5 py-2.5 rounded-xl transition-colors duration-200"
-            style={{ background: "rgba(139,92,246,0.07)", border: "1px solid rgba(139,92,246,0.12)" }}
+            style={{ background: "rgba(99,102,241,0.08)", border: "1px solid rgba(129,140,248,0.15)" }}
           >
-            <Avatar className="h-8 w-8 shrink-0 ring-2" style={{ "--tw-ring-color": "rgba(139,92,246,0.3)" } as any}>
+            <Avatar className="h-8 w-8 shrink-0 ring-2" style={{ "--tw-ring-color": "rgba(99,102,241,0.3)" } as any}>
               <AvatarImage src={profile?.avatar_url} />
               <AvatarFallback className="text-[10.5px] font-bold"
-                style={{ background: "rgba(124,58,237,0.25)", color: "rgba(196,181,253,1)" }}
+                style={{ background: "rgba(99,102,241,0.25)", color: "rgba(165,180,252,1)" }}
               >
                 {initials}
               </AvatarFallback>

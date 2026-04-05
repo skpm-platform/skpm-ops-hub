@@ -14,7 +14,7 @@ export function StatusFilter({ statuses, selected, onSelect }: StatusFilterProps
           key={s.value}
           onClick={() => onSelect(s.value)}
           className={cn(
-            "inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-colors border",
+            "inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-medium transition-colors border min-h-[32px]",
             selected === s.value
               ? "bg-primary text-primary-foreground border-primary"
               : "bg-background text-muted-foreground border-border hover:bg-accent hover:text-accent-foreground"
