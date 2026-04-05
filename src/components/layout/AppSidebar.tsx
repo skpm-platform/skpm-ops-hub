@@ -12,7 +12,7 @@ import { NavLink } from "@/components/NavLink";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLocation } from "react-router-dom";
 import { useSystemSetting } from "@/hooks/use-system-settings";
-import { useUserRole } from "@/hooks/use-profile";
+import { useUserRole, useProfile } from "@/hooks/use-profile";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -23,6 +23,7 @@ import {
 import {
   Collapsible, CollapsibleContent, CollapsibleTrigger,
 } from "@/components/ui/collapsible";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import skpmLogo from "@/assets/skpm-logo.png";
 
@@ -129,10 +130,11 @@ function useSidebarBadges(isManagerUp: boolean) {
 export function AppSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const location = useLocation();
   const { data: companyLogoUrl } = useSystemSetting("company_logo_url");
   const { data: role } = useUserRole();
+  const { data: profile } = useProfile();
   const userRole = role ?? "staff";
   const isAdmin = userRole === "admin";
   const isManagerUp = userRole === "admin" || userRole === "manager";
@@ -140,6 +142,10 @@ export function AppSidebar() {
   const { canAccess } = usePermissions();
 
   const logoSrc = companyLogoUrl || skpmLogo;
+
+  const displayName = profile?.name || user?.email?.split("@")[0] || "User";
+  const initials = displayName.split(" ").map((n: string) => n[0]).join("").substring(0, 2).toUpperCase();
+  const roleLabel = userRole.charAt(0).toUpperCase() + userRole.slice(1);
 
   const isActive = (url: string) => url === "/" ? location.pathname === "/" : location.pathname.startsWith(url);
   const groupHasActive = (items: { url: string }[]) => items.some((i) => isActive(i.url));
@@ -166,23 +172,32 @@ export function AppSidebar() {
 
   return (
     <Sidebar collapsible="icon" className="border-r-0">
-      {/* Premium Sidebar Header */}
-      <SidebarHeader className="px-4 py-5">
+      {/* ── Premium Header ── */}
+      <SidebarHeader className="px-4 py-4">
         <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-white/15 to-white/5 backdrop-blur-sm flex items-center justify-center p-1.5 shrink-0 ring-1 ring-white/10 shadow-lg shadow-black/20">
+          <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-white/12 to-white/[0.04] backdrop-blur-sm flex items-center justify-center p-1.5 shrink-0 ring-1 ring-white/[0.08] shadow-lg shadow-black/30">
             <img src={logoSrc} alt="SKPM" className="h-full w-full rounded-lg object-contain" />
           </div>
           {!collapsed && (
-            <div className="flex flex-col leading-none">
-              <span className="text-sm font-bold tracking-tight text-white">SKPM</span>
-              <span className="text-[10px] text-sidebar-foreground/50 mt-1 font-medium">Technical Services LLC</span>
-            </div>
+            <>
+              <div className="flex flex-col leading-none min-w-0">
+                <span className="text-[13px] font-bold tracking-tight text-white truncate">SKPM</span>
+                <span className="text-[10px] text-sidebar-foreground/38 mt-0.5 font-medium truncate">Technical Services LLC</span>
+              </div>
+              <div className="ml-auto shrink-0">
+                <span className="flex items-center gap-1 bg-emerald-500/10 border border-emerald-500/20 rounded-full px-2 py-0.5">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                  <span className="text-[9px] text-emerald-400 font-bold tracking-wide">LIVE</span>
+                </span>
+              </div>
+            </>
           )}
         </div>
       </SidebarHeader>
 
-      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-sidebar-border/60 to-transparent" />
+      <div className="mx-3.5 h-px bg-gradient-to-r from-transparent via-sidebar-border/50 to-transparent" />
 
+      {/* ── Navigation ── */}
       <SidebarContent className="px-2.5 py-3 scrollbar-thin">
         {visibleGroups.map((group) => {
           const active = groupHasActive(group.items);
@@ -200,8 +215,8 @@ export function AppSidebar() {
                             <NavLink
                               to={item.url}
                               end={item.url === "/"}
-                              className="text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-xl relative"
-                              activeClassName="bg-sidebar-primary/15 text-sidebar-primary font-medium shadow-sm"
+                              className="text-sidebar-foreground/55 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground transition-all duration-200 rounded-xl relative"
+                              activeClassName="bg-sidebar-primary/20 text-sidebar-primary shadow-sm"
                             >
                               <item.icon className="h-4 w-4" />
                               {count > 0 && (
@@ -223,11 +238,11 @@ export function AppSidebar() {
           return (
             <Collapsible key={group.label} defaultOpen={active || group.label === "Overview"}>
               <SidebarGroup className="py-0.5">
-                <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-2 group">
-                  <span className="text-[10px] font-bold uppercase tracking-[0.12em] text-sidebar-foreground/35 group-hover:text-sidebar-foreground/55 transition-colors">
+                <CollapsibleTrigger className="flex w-full items-center justify-between px-3 py-1.5 group rounded-lg hover:bg-sidebar-accent/30 transition-colors duration-200">
+                  <span className="text-[9.5px] font-bold uppercase tracking-[0.14em] text-sidebar-foreground/28 group-hover:text-sidebar-foreground/50 transition-colors">
                     {group.label}
                   </span>
-                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/25 transition-transform duration-300 group-data-[state=open]:rotate-180" />
+                  <ChevronDown className="h-3 w-3 text-sidebar-foreground/20 transition-transform duration-300 group-data-[state=open]:rotate-180" />
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <SidebarGroupContent>
@@ -241,13 +256,13 @@ export function AppSidebar() {
                               <NavLink
                                 to={item.url}
                                 end={item.url === "/"}
-                                className="text-[13px] text-sidebar-foreground/80 hover:bg-sidebar-accent hover:text-white transition-all duration-200 rounded-xl px-3 py-2.5 group/item"
-                                activeClassName="bg-gradient-to-r from-sidebar-primary/20 via-sidebar-primary/12 to-transparent text-white font-semibold border-l-[3px] border-sidebar-primary shadow-[inset_0_1px_0_0_rgba(255,255,255,0.05)]"
+                                className="text-[12.5px] text-sidebar-foreground/60 hover:bg-sidebar-accent/70 hover:text-sidebar-accent-foreground transition-all duration-150 rounded-xl px-3 py-2 group/item"
+                                activeClassName="bg-gradient-to-r from-sidebar-primary/22 via-sidebar-primary/12 to-transparent text-white font-semibold border-l-[2.5px] border-sidebar-primary/80"
                               >
-                                <item.icon className={`mr-3 h-[16px] w-[16px] shrink-0 transition-colors duration-200 ${itemActive ? "text-sidebar-primary" : "text-sidebar-foreground/50 group-hover/item:text-sidebar-foreground/80"}`} />
+                                <item.icon className={`mr-2.5 h-[15px] w-[15px] shrink-0 transition-colors duration-150 ${itemActive ? "text-sidebar-primary" : "text-sidebar-foreground/38 group-hover/item:text-sidebar-foreground/65"}`} />
                                 <span className="flex-1 truncate">{item.title}</span>
                                 {count > 0 && (
-                                  <span className={`ml-auto h-5 min-w-[22px] rounded-full text-[10px] font-bold flex items-center justify-center px-1.5 tabular-nums shadow-sm ${count > 5 ? "bg-destructive/25 text-destructive" : "bg-warning/20 text-warning"}`}>
+                                  <span className={`ml-auto h-5 min-w-[22px] rounded-full text-[10px] font-bold flex items-center justify-center px-1.5 tabular-nums shadow-sm ${count > 5 ? "bg-destructive/20 text-destructive" : "bg-amber-500/15 text-amber-400"}`}>
                                     {count > 99 ? "99+" : count}
                                   </span>
                                 )}
@@ -265,13 +280,34 @@ export function AppSidebar() {
         })}
       </SidebarContent>
 
-      <div className="mx-4 h-px bg-gradient-to-r from-transparent via-sidebar-border/60 to-transparent" />
+      <div className="mx-3.5 h-px bg-gradient-to-r from-transparent via-sidebar-border/50 to-transparent" />
 
-      <SidebarFooter className="p-3">
+      {/* ── Footer: User profile + Sign out ── */}
+      <SidebarFooter className="p-3 space-y-1">
+        {/* User profile card */}
+        {!collapsed && (
+          <div className="flex items-center gap-2.5 px-2.5 py-2 rounded-xl bg-sidebar-accent/40 border border-sidebar-border/40 mb-1">
+            <Avatar className="h-7 w-7 ring-1 ring-sidebar-primary/30 shrink-0">
+              <AvatarImage src={profile?.avatar_url} />
+              <AvatarFallback className="bg-sidebar-primary/20 text-sidebar-primary text-[10px] font-bold">
+                {initials}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex flex-col leading-none min-w-0 flex-1">
+              <span className="text-[12px] font-semibold text-sidebar-foreground/85 truncate">{displayName}</span>
+              <span className="text-[10px] text-sidebar-foreground/32 mt-0.5 font-medium truncate">{roleLabel}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Sign out button */}
         <SidebarMenu>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={signOut} className="text-[13px] text-sidebar-foreground/60 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 rounded-xl py-2.5">
-              <LogOut className="mr-3 h-[16px] w-[16px]" />
+            <SidebarMenuButton
+              onClick={signOut}
+              className="text-[12.5px] text-sidebar-foreground/45 hover:bg-red-500/10 hover:text-red-400 transition-all duration-200 rounded-xl py-2"
+            >
+              <LogOut className="mr-2.5 h-[15px] w-[15px] shrink-0" />
               {!collapsed && <span>Sign Out</span>}
             </SidebarMenuButton>
           </SidebarMenuItem>

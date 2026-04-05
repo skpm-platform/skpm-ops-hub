@@ -6,8 +6,6 @@ import { useProfile, useUserRole } from "@/hooks/use-profile";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NotificationBell } from "@/components/NotificationBell";
 import { GlobalSearch } from "@/components/GlobalSearch";
-import { Button } from "@/components/ui/button";
-import { Search, PanelLeft, Sparkles } from "lucide-react";
 import { Separator } from "@/components/ui/separator";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { useIdleTimeout } from "@/hooks/use-idle-timeout";
@@ -38,6 +36,12 @@ export function AppLayout() {
     ? role.charAt(0).toUpperCase() + role.slice(1)
     : "Staff";
 
+  const roleBadgeStyle: Record<string, string> = {
+    Admin: "bg-violet-500/10 text-violet-600 dark:text-violet-400 border-violet-200/60 dark:border-violet-500/25",
+    Manager: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-200/60 dark:border-blue-500/25",
+    Staff: "bg-slate-500/10 text-slate-600 dark:text-slate-400 border-slate-200/60 dark:border-slate-500/25",
+  };
+
   useIdleTimeout();
   useKeyboardShortcuts();
 
@@ -45,16 +49,17 @@ export function AppLayout() {
     <SidebarProvider>
       <AppSidebar />
       <div className="flex-1 flex flex-col min-h-svh overflow-hidden">
-        {/* ───────────────────── Header ───────────────────── */}
-        <header className="sticky top-0 z-30 h-14 border-b border-border/60 bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
+
+        {/* ─────────────── Premium Sticky Header ─────────────── */}
+        <header className="sticky top-0 z-30 h-14 border-b border-border/50 bg-background/85 backdrop-blur-xl supports-[backdrop-filter]:bg-background/70">
+          {/* Subtle gradient accent at bottom of header */}
+          <div className="absolute bottom-0 left-0 right-0 h-[1px] bg-gradient-to-r from-transparent via-primary/20 to-transparent" />
+
           <div className="flex items-center justify-between h-full px-4 sm:px-6">
             {/* Left section */}
             <div className="flex items-center gap-3">
-              <SidebarTrigger className="h-8 w-8 text-muted-foreground hover:text-foreground transition-colors" />
-              <Separator
-                orientation="vertical"
-                className="h-5 hidden sm:block"
-              />
+              <SidebarTrigger className="h-8 w-8 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-all duration-200" />
+              <Separator orientation="vertical" className="h-5 hidden sm:block opacity-40" />
               <div className="hidden sm:block">
                 <GlobalSearch />
               </div>
@@ -67,22 +72,21 @@ export function AppLayout() {
               </div>
               <ThemeToggle />
               <NotificationBell />
-              <Separator
-                orientation="vertical"
-                className="h-5 mx-1 hidden sm:block"
-              />
-              <div className="flex items-center gap-2.5 pl-1">
-                <Avatar className="h-8 w-8 ring-2 ring-border/50">
+              <Separator orientation="vertical" className="h-5 mx-1 hidden sm:block opacity-40" />
+
+              {/* User profile chip */}
+              <div className="flex items-center gap-2.5 pl-1 py-1 pr-2 rounded-xl hover:bg-muted/50 transition-colors duration-200 cursor-default">
+                <Avatar className="h-7 w-7 ring-2 ring-primary/20">
                   <AvatarImage src={profile?.avatar_url} />
-                  <AvatarFallback className="bg-primary/10 text-primary text-xs font-semibold">
+                  <AvatarFallback className="bg-gradient-to-br from-primary/20 to-violet-500/15 text-primary text-[10px] font-bold">
                     {initials}
                   </AvatarFallback>
                 </Avatar>
-                <div className="hidden md:flex flex-col">
-                  <span className="text-sm font-medium leading-none">
+                <div className="hidden md:flex flex-col gap-0.5">
+                  <span className="text-[13px] font-semibold leading-none text-foreground/90">
                     {displayName}
                   </span>
-                  <span className="text-[11px] text-muted-foreground leading-none mt-0.5">
+                  <span className={`text-[9.5px] font-bold leading-none px-1.5 py-0.5 rounded-full border w-fit ${roleBadgeStyle[roleLabel] ?? roleBadgeStyle["Staff"]}`}>
                     {roleLabel}
                   </span>
                 </div>
@@ -91,7 +95,7 @@ export function AppLayout() {
           </div>
         </header>
 
-        {/* ───────────────────── Main content ───────────────────── */}
+        {/* ─────────────── Main content ─────────────── */}
         <main className="flex-1 overflow-y-auto">
           <div className="gradient-mesh min-h-full">
             {/*
@@ -109,7 +113,7 @@ export function AppLayout() {
           </div>
         </main>
 
-        {/* ───────────────────── Mobile bottom nav ───────────────────── */}
+        {/* ─────────────── Mobile bottom nav ─────────────── */}
         <MobileBottomNav />
       </div>
     </SidebarProvider>
