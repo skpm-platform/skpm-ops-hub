@@ -59,7 +59,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     };
 
+    // Safety timeout: if auth doesn't resolve in 5 seconds, stop loading
+    const timeout = setTimeout(() => {
+      if (mounted) {
+        console.warn('[Auth] Timed out waiting for session — redirecting to login');
+        setLoading(false);
+      }
+    }, 5000);
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
+      clearTimeout(timeout);
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
       await syncRole(nextSession?.user ?? null);
@@ -68,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     void supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
       if (!mounted) return;
+      clearTimeout(timeout);
 
       setSession(initialSession);
       setUser(initialSession?.user ?? null);
@@ -76,10 +86,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (mounted) {
         setLoading(false);
       }
+    }).catch((err) => {
+      console.error('[Auth] Failed to get session:', err);
+      if (mounted) {
+        clearTimeout(timeout);
+        setLoading(false);
+      }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(timeout);
       subscription.unsubscribe();
     };
   }, []);
