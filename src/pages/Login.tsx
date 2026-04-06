@@ -360,7 +360,7 @@ export default function Login() {
               <div className="h-8 w-8 rounded-xl bg-violet-600 flex items-center justify-center shadow-lg shadow-violet-600/30">
                 <img src={logoSrc} alt="" className="h-5 w-5 object-contain brightness-0 invert" />
               </div>
-              <span className="text-[13px] font-bold text-violet-600 tracking-tight">SKPM Ops Hub</span>
+              <span className="text-[13px] font-bold text-violet-600 tracking-tight">SKPM Technical Service</span>
             </div>
             <h2 className="text-[2rem] font-black text-slate-900 tracking-tight leading-tight" style={{ letterSpacing: "-0.03em" }}>
               {mode === "login" ? "Welcome back" : "Forgot password?"}

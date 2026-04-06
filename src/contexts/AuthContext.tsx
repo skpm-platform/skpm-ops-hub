@@ -23,17 +23,28 @@ const AuthContext = createContext<AuthContextType>({
 export const useAuth = () => useContext(AuthContext);
 
 async function fetchUserRole(userId: string): Promise<Role> {
-  const { data, error } = await supabase
-    .from("user_roles")
-    .select("role")
-    .eq("user_id", userId)
-    .maybeSingle();
+  try {
+    const result = await Promise.race([
+      supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .maybeSingle(),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("timeout")), 4000)
+      ),
+    ]);
 
-  if (error) {
+    if (result.error) {
+      console.warn("[Auth] Role fetch error:", result.error.message);
+      return "staff";
+    }
+
+    return (result.data?.role as Role) ?? "staff";
+  } catch {
+    console.warn("[Auth] Role fetch timed out, defaulting to staff");
     return "staff";
   }
-
-  return (data?.role as Role) ?? "staff";
 }
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -102,10 +113,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   const signOut = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (err) {
+      console.warn("[Auth] Sign out error:", err);
+    }
     setSession(null);
     setUser(null);
     setRole(null);
+    setLoading(false);
+    // Force redirect to login
+    window.location.href = window.location.origin + (import.meta.env.BASE_URL || "/");
   }, []);
 
   return (
