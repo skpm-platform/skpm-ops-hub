@@ -1,0 +1,1 @@
+import{b as t}from"./index-B_vyMUcV.js";async function n(i,e,a){try{const{data:{user:s}}=await t.auth.getUser();if(!s)return;const c=i.replace(/<[^>]*>/g,"").slice(0,200),o=e?e.replace(/<[^>]*>/g,"").slice(0,1e3):void 0,r=a?a.replace(/<[^>]*>/g,"").slice(0,100):void 0;await t.from("audit_logs").insert({user_id:s.id,action:c,details:o,module:r||"general"})}catch{}}export{n as l};

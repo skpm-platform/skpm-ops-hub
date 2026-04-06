@@ -1,0 +1,3 @@
+# This is a private internal tool. All crawlers are disallowed.
+User-agent: *
+Disallow: /

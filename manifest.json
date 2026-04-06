@@ -1,0 +1,17 @@
+{
+  "name": "SKPM Ops-Hub",
+  "short_name": "Ops-Hub",
+  "description": "Enterprise HR and operations management platform for SKPM Technical Service",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0a0f1e",
+  "theme_color": "#1e40af",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "48x48",
+      "type": "image/x-icon"
+    }
+  ]
+}
